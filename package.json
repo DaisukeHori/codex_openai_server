@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/codex-api-server.git"
+    "url": "https://github.com/DaisukeHori/codex_openai_server.git"
   },
   "scripts": {
     "start": "electron .",
