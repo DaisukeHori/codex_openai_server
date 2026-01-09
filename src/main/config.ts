@@ -6,22 +6,26 @@ import fs from 'fs';
 export interface AppConfig {
   // Onboarding
   onboardingCompleted: boolean;
-  
+
   // Server
   port: number;
   masterKey: string;
   defaultModel: string;
   autoStart: boolean;
-  
+
   // Codex
   codexAuthenticated: boolean;
   codexAuthMethod: 'chatgpt' | 'api_key' | null;
-  
+
+  // Claude
+  claudeAuthenticated: boolean;
+  claudeAuthMethod: 'api_key' | 'subscription' | null;
+
   // UI
   theme: 'light' | 'dark' | 'system';
   minimizeToTray: boolean;
   startMinimized: boolean;
-  
+
   // Tunnel
   tunnelAutoStart: boolean;
   lastTunnelUrl: string | null;
@@ -35,6 +39,8 @@ const defaults: AppConfig = {
   autoStart: true,
   codexAuthenticated: false,
   codexAuthMethod: null,
+  claudeAuthenticated: false,
+  claudeAuthMethod: null,
   theme: 'system',
   minimizeToTray: true,
   startMinimized: false,
