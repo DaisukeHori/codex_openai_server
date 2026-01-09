@@ -3,477 +3,617 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com;">
-  <title>Codex API Server - セットアップ</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Codex API Server</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Inter', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #1f2937;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-    .container {
-      background: white;
-      border-radius: 24px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-      width: 100%;
-      max-width: 600px;
+    
+    html, body {
+      height: 100%;
       overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #fafafa;
+      color: #111;
     }
-    .header {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      color: white;
-      padding: 32px;
-      text-align: center;
-    }
-    .header h1 { font-size: 28px; font-weight: 700; }
-    .header p { margin-top: 8px; opacity: 0.9; }
-    .progress {
+    
+    .app {
+      height: 100%;
       display: flex;
-      justify-content: center;
-      gap: 12px;
-      margin-top: 24px;
     }
-    .progress-step {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.3);
-      transition: all 0.3s;
-    }
-    .progress-step.active { background: white; transform: scale(1.2); }
-    .progress-step.done { background: #10b981; }
-    .content {
-      padding: 40px;
-      min-height: 350px;
+    
+    /* Sidebar */
+    .sidebar {
+      width: 200px;
+      background: #fff;
+      border-right: 1px solid #e5e5e5;
+      padding: 30px 0;
       display: flex;
       flex-direction: column;
     }
-    .step { display: none; flex-direction: column; flex: 1; animation: fadeIn 0.3s; }
-    .step.active { display: flex; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .step-title { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
-    .step-desc { color: #6b7280; margin-bottom: 24px; line-height: 1.6; }
-    .icon-container {
-      width: 80px;
-      height: 80px;
-      border-radius: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 24px;
-      font-size: 36px;
-    }
-    .icon-purple { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
-    .icon-green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-    .icon-blue { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
-    .icon-orange { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-    .form-group { margin-bottom: 20px; }
-    .form-group label { display: block; font-weight: 500; margin-bottom: 8px; }
-    .form-group input {
-      width: 100%;
-      padding: 14px 16px;
-      border: 2px solid #e5e7eb;
-      border-radius: 12px;
-      font-size: 16px;
-      transition: all 0.2s;
-    }
-    .form-group input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); }
-    .key-display {
-      background: #f3f4f6;
-      padding: 16px;
-      border-radius: 12px;
-      font-family: monospace;
+    
+    .logo {
+      padding: 0 24px 30px;
       font-size: 14px;
-      word-break: break-all;
-      margin-bottom: 16px;
+      font-weight: 600;
+      color: #111;
+      letter-spacing: -0.3px;
     }
-    .status-box {
-      background: #f9fafb;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 20px;
+    
+    .nav {
+      flex: 1;
     }
-    .status-item {
+    
+    .nav-item {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    .status-item:last-child { border-bottom: none; }
-    .status-label { color: #6b7280; }
-    .status-value { font-weight: 500; display: flex; align-items: center; gap: 8px; }
-    .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-    }
-    .status-ok { background: #10b981; }
-    .status-error { background: #ef4444; }
-    .status-pending { background: #f59e0b; animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    .buttons {
-      display: flex;
       gap: 12px;
-      margin-top: auto;
-      padding-top: 24px;
-    }
-    .btn {
-      flex: 1;
-      padding: 16px 24px;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: 600;
+      padding: 12px 24px;
+      font-size: 13px;
+      color: #888;
       cursor: pointer;
-      transition: all 0.2s;
-      border: none;
+      transition: all 0.15s;
+      border-left: 2px solid transparent;
     }
-    .btn-primary {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      color: white;
+    
+    .nav-item:hover {
+      color: #111;
+      background: #fafafa;
     }
-    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3); }
-    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
-    .btn-secondary { background: #f3f4f6; color: #4b5563; }
-    .btn-secondary:hover { background: #e5e7eb; }
-    .btn-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
-    .spinner {
+    
+    .nav-item.active {
+      color: #111;
+      background: #fafafa;
+      border-left-color: #111;
+    }
+    
+    .nav-item.done {
+      color: #22c55e;
+    }
+    
+    .nav-num {
       width: 20px;
       height: 20px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: white;
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      display: inline-block;
-      margin-right: 8px;
+      background: #e5e5e5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 500;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .help-text { font-size: 14px; color: #6b7280; margin-top: 8px; }
-    .success-animation {
-      text-align: center;
-      padding: 40px 0;
+    
+    .nav-item.active .nav-num {
+      background: #111;
+      color: #fff;
     }
-    .success-icon {
-      width: 100px;
-      height: 100px;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    
+    .nav-item.done .nav-num {
+      background: #22c55e;
+      color: #fff;
+    }
+    
+    /* Main */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .header {
+      padding: 30px 40px 0;
+    }
+    
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      margin-bottom: 6px;
+    }
+    
+    .header p {
+      font-size: 13px;
+      color: #666;
+    }
+    
+    .body {
+      flex: 1;
+      padding: 30px 40px;
+      overflow-y: auto;
+    }
+    
+    .footer {
+      padding: 20px 40px;
+      border-top: 1px solid #e5e5e5;
+      background: #fff;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    /* Steps */
+    .step {
+      display: none;
+      height: 100%;
+      flex-direction: column;
+    }
+    
+    .step.active {
+      display: flex;
+    }
+    
+    /* Buttons */
+    .btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+    
+    .btn-primary {
+      background: #111;
+      color: #fff;
+      border-color: #111;
+    }
+    
+    .btn-primary:hover {
+      background: #333;
+    }
+    
+    .btn-secondary {
+      background: #fff;
+      color: #111;
+      border-color: #ddd;
+    }
+    
+    .btn-secondary:hover {
+      background: #fafafa;
+      border-color: #ccc;
+    }
+    
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    
+    /* Cards */
+    .card {
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    
+    .card-title {
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 12px;
+    }
+    
+    /* Feature grid */
+    .features {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    
+    .feature {
+      padding: 16px;
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+    }
+    
+    .feature-title {
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    
+    .feature-desc {
+      font-size: 12px;
+      color: #666;
+    }
+    
+    /* Status */
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .status-row:last-child {
+      border-bottom: none;
+    }
+    
+    .status-label {
+      font-size: 13px;
+      color: #666;
+    }
+    
+    .status-value {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    .status-ok { color: #22c55e; }
+    .status-warn { color: #f59e0b; }
+    .status-error { color: #ef4444; }
+    
+    /* Form */
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    
+    .form-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      background: #fff;
+      transition: border-color 0.15s;
+    }
+    
+    .form-input:focus {
+      outline: none;
+      border-color: #111;
+    }
+    
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .input-row .form-input {
+      flex: 1;
+    }
+    
+    .form-hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 6px;
+    }
+    
+    /* Complete */
+    .complete-icon {
+      width: 48px;
+      height: 48px;
+      background: #22c55e;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 0 auto 24px;
-      font-size: 48px;
-      animation: scaleIn 0.5s ease-out;
+      margin-bottom: 20px;
     }
-    @keyframes scaleIn { from { transform: scale(0); } to { transform: scale(1); } }
-    .feature-list {
-      text-align: left;
-      margin: 24px 0;
-    }
-    .feature-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 0;
-      color: #374151;
-    }
-    .feature-item::before {
-      content: '✓';
+    
+    .complete-icon svg {
       width: 24px;
       height: 24px;
-      background: #10b981;
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      stroke: #fff;
+      stroke-width: 3;
+      fill: none;
+    }
+    
+    .summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    
+    .summary-item {
+      padding: 16px;
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+    }
+    
+    .summary-label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    
+    .summary-value {
       font-size: 14px;
-      flex-shrink: 0;
+      font-weight: 500;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+    
+    /* Action buttons */
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>🚀 Codex API Server</h1>
-      <p>セットアップウィザード</p>
-      <div class="progress">
-        <div class="progress-step active" data-step="1"></div>
-        <div class="progress-step" data-step="2"></div>
-        <div class="progress-step" data-step="3"></div>
-        <div class="progress-step" data-step="4"></div>
-        <div class="progress-step" data-step="5"></div>
-      </div>
+  <div class="app">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="logo">Codex API Server</div>
+      <nav class="nav">
+        <div class="nav-item active" data-step="1">
+          <span class="nav-num">1</span>
+          <span>はじめに</span>
+        </div>
+        <div class="nav-item" data-step="2">
+          <span class="nav-num">2</span>
+          <span>Codex CLI</span>
+        </div>
+        <div class="nav-item" data-step="3">
+          <span class="nav-num">3</span>
+          <span>マスターキー</span>
+        </div>
+        <div class="nav-item" data-step="4">
+          <span class="nav-num">4</span>
+          <span>ポート設定</span>
+        </div>
+        <div class="nav-item" data-step="5">
+          <span class="nav-num">5</span>
+          <span>完了</span>
+        </div>
+      </nav>
     </div>
     
-    <div class="content">
-      <!-- Step 1: Welcome -->
+    <!-- Main content -->
+    <div class="main">
+      <!-- Step 1 -->
       <div class="step active" data-step="1">
-        <div class="icon-container icon-purple">👋</div>
-        <h2 class="step-title">ようこそ！</h2>
-        <p class="step-desc">
-          Codex API Serverは、OpenAI APIと互換性のあるローカルサーバーです。
-          このウィザードでは、サーバーを使い始めるための設定を行います。
-        </p>
-        <div class="feature-list">
-          <div class="feature-item">OpenAI Responses API 完全互換</div>
-          <div class="feature-item">Chat Completions API サポート</div>
-          <div class="feature-item">マルチテナントAPIキー管理</div>
-          <div class="feature-item">Cloudflare Tunnelで即座に公開</div>
+        <div class="header">
+          <h1>はじめに</h1>
+          <p>OpenAI API互換サーバーをセットアップします</p>
         </div>
-        <div class="buttons">
-          <button class="btn btn-primary" onclick="nextStep()">セットアップを開始 →</button>
+        <div class="body">
+          <div class="features">
+            <div class="feature">
+              <div class="feature-title">API互換</div>
+              <div class="feature-desc">OpenAI APIと完全互換のエンドポイント</div>
+            </div>
+            <div class="feature">
+              <div class="feature-title">マルチテナント</div>
+              <div class="feature-desc">複数のAPIキーを発行・管理</div>
+            </div>
+            <div class="feature">
+              <div class="feature-title">トンネル</div>
+              <div class="feature-desc">Cloudflareで外部公開</div>
+            </div>
+            <div class="feature">
+              <div class="feature-title">使用量追跡</div>
+              <div class="feature-desc">キーごとの利用状況を記録</div>
+            </div>
+          </div>
+        </div>
+        <div class="footer">
+          <div></div>
+          <button class="btn btn-primary" onclick="goToStep(2)">次へ</button>
         </div>
       </div>
       
-      <!-- Step 2: Codex CLI Check -->
+      <!-- Step 2 -->
       <div class="step" data-step="2">
-        <div class="icon-container icon-blue">🔧</div>
-        <h2 class="step-title">Codex CLI 確認</h2>
-        <p class="step-desc">
-          Codex CLIのインストール状態と認証状態を確認します。
-        </p>
-        <div class="status-box">
-          <div class="status-item">
-            <span class="status-label">インストール状態</span>
-            <span class="status-value" id="codex-installed">
-              <span class="status-dot status-pending"></span>
-              確認中...
-            </span>
+        <div class="header">
+          <h1>Codex CLI</h1>
+          <p>Codex CLIのインストールと認証を確認します</p>
+        </div>
+        <div class="body">
+          <div class="card">
+            <div class="status-row">
+              <span class="status-label">インストール</span>
+              <span id="codex-installed" class="status-value">確認中...</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">認証</span>
+              <span id="codex-auth" class="status-value">確認中...</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">バージョン</span>
+              <span id="codex-version" class="status-value">-</span>
+            </div>
           </div>
-          <div class="status-item">
-            <span class="status-label">バージョン</span>
-            <span class="status-value" id="codex-version">-</span>
-          </div>
-          <div class="status-item">
-            <span class="status-label">認証状態</span>
-            <span class="status-value" id="codex-auth">
-              <span class="status-dot status-pending"></span>
-              確認中...
-            </span>
+          <div class="actions" id="codex-actions" style="display:none;">
+            <button class="btn btn-secondary" onclick="installCodex()" id="install-btn" style="display:none;">インストール</button>
+            <button class="btn btn-secondary" onclick="authCodex()" id="auth-btn" style="display:none;">認証する</button>
+            <button class="btn btn-secondary" onclick="checkCodex()">再確認</button>
           </div>
         </div>
-        <p class="help-text" id="codex-help"></p>
-        <div class="buttons">
-          <button class="btn btn-secondary" onclick="prevStep()">← 戻る</button>
-          <button class="btn btn-primary" id="codex-next" onclick="nextStep()" disabled>次へ →</button>
+        <div class="footer">
+          <button class="btn btn-secondary" onclick="goToStep(1)">戻る</button>
+          <button class="btn btn-primary" onclick="goToStep(3)" id="step2-next" disabled>次へ</button>
         </div>
       </div>
       
-      <!-- Step 3: Master Key -->
+      <!-- Step 3 -->
       <div class="step" data-step="3">
-        <div class="icon-container icon-orange">🔑</div>
-        <h2 class="step-title">マスターキー設定</h2>
-        <p class="step-desc">
-          管理画面へのアクセスとAPIキー管理に使用するマスターキーを設定します。
-        </p>
-        <div class="form-group">
-          <label>マスターキー</label>
-          <input type="text" id="master-key" placeholder="自動生成されます" readonly>
+        <div class="header">
+          <h1>マスターキー</h1>
+          <p>管理用のマスターキーを生成します</p>
         </div>
-        <button class="btn btn-secondary" onclick="generateKey()" style="margin-bottom: 16px;">
-          🔄 新しいキーを生成
-        </button>
-        <p class="help-text">
-          ⚠️ このキーは安全な場所に保存してください。管理画面へのログインに必要です。
-        </p>
-        <div class="buttons">
-          <button class="btn btn-secondary" onclick="prevStep()">← 戻る</button>
-          <button class="btn btn-primary" onclick="saveMasterKey()">次へ →</button>
+        <div class="body">
+          <div class="form-group">
+            <label class="form-label">マスターキー</label>
+            <div class="input-row">
+              <input type="text" class="form-input" id="master-key" readonly placeholder="生成ボタンを押してください">
+              <button class="btn btn-secondary" onclick="generateKey()">生成</button>
+            </div>
+            <p class="form-hint">このキーは管理操作に必要です。安全に保管してください。</p>
+          </div>
+        </div>
+        <div class="footer">
+          <button class="btn btn-secondary" onclick="goToStep(2)">戻る</button>
+          <button class="btn btn-primary" onclick="goToStep(4)" id="step3-next" disabled>次へ</button>
         </div>
       </div>
       
-      <!-- Step 4: Port Setting -->
+      <!-- Step 4 -->
       <div class="step" data-step="4">
-        <div class="icon-container icon-green">🌐</div>
-        <h2 class="step-title">サーバー設定</h2>
-        <p class="step-desc">
-          サーバーの待ち受けポートを設定します。
-        </p>
-        <div class="form-group">
-          <label>ポート番号</label>
-          <input type="number" id="port" value="8080" min="1" max="65535">
+        <div class="header">
+          <h1>ポート設定</h1>
+          <p>サーバーが使用するポート番号を指定します</p>
         </div>
-        <p class="help-text">
-          デフォルトは8080です。他のアプリケーションと競合する場合は変更してください。
-        </p>
-        <div class="buttons">
-          <button class="btn btn-secondary" onclick="prevStep()">← 戻る</button>
-          <button class="btn btn-primary" onclick="savePort()">次へ →</button>
+        <div class="body">
+          <div class="form-group">
+            <label class="form-label">ポート番号</label>
+            <input type="number" class="form-input" id="port" value="8080" min="1024" max="65535" style="max-width:200px;">
+            <p class="form-hint">1024〜65535の範囲。既定は8080です。</p>
+          </div>
+          <div class="card">
+            <div class="status-row">
+              <span class="status-label">アクセスURL</span>
+              <span class="status-value" id="access-url">http://localhost:8080</span>
+            </div>
+          </div>
+        </div>
+        <div class="footer">
+          <button class="btn btn-secondary" onclick="goToStep(3)">戻る</button>
+          <button class="btn btn-primary" onclick="goToStep(5)">次へ</button>
         </div>
       </div>
       
-      <!-- Step 5: Complete -->
+      <!-- Step 5 -->
       <div class="step" data-step="5">
-        <div class="success-animation">
-          <div class="success-icon">✓</div>
-          <h2 class="step-title">セットアップ完了！</h2>
-          <p class="step-desc">
-            Codex API Serverのセットアップが完了しました。
-            サーバーを起動して使い始めましょう！
-          </p>
+        <div class="header">
+          <h1>セットアップ完了</h1>
+          <p>サーバーを起動する準備ができました</p>
         </div>
-        <div class="status-box">
-          <div class="status-item">
-            <span class="status-label">サーバーURL</span>
-            <span class="status-value" id="final-url">http://localhost:8080</span>
+        <div class="body">
+          <div class="complete-icon">
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </div>
-          <div class="status-item">
-            <span class="status-label">マスターキー</span>
-            <span class="status-value" id="final-key" style="font-family: monospace; font-size: 12px;">msk_xxx...</span>
+          <div class="summary">
+            <div class="summary-item">
+              <div class="summary-label">ポート</div>
+              <div class="summary-value" id="summary-port">8080</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">マスターキー</div>
+              <div class="summary-value" id="summary-key">-</div>
+            </div>
           </div>
         </div>
-        <div class="buttons">
-          <button class="btn btn-success" onclick="completeSetup()" id="complete-btn">
-            🚀 サーバーを起動
-          </button>
+        <div class="footer">
+          <button class="btn btn-secondary" onclick="goToStep(4)">戻る</button>
+          <button class="btn btn-primary" onclick="completeSetup()">サーバーを起動</button>
         </div>
       </div>
     </div>
   </div>
-  
+
   <script>
     let currentStep = 1;
-    const totalSteps = 5;
     
-    // Update progress indicators
-    function updateProgress() {
-      document.querySelectorAll('.progress-step').forEach((el, i) => {
-        el.classList.remove('active', 'done');
-        if (i + 1 < currentStep) el.classList.add('done');
-        if (i + 1 === currentStep) el.classList.add('active');
+    function goToStep(step) {
+      // Update steps
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.querySelector(`.step[data-step="${step}"]`).classList.add('active');
+      
+      // Update nav
+      document.querySelectorAll('.nav-item').forEach((item, i) => {
+        item.classList.remove('active');
+        if (i + 1 < step) item.classList.add('done');
+        else item.classList.remove('done');
+        if (i + 1 === step) item.classList.add('active');
       });
       
-      document.querySelectorAll('.step').forEach((el, i) => {
-        el.classList.toggle('active', i + 1 === currentStep);
-      });
+      currentStep = step;
+      
+      if (step === 2) checkCodex();
+      if (step === 5) updateSummary();
     }
     
-    function nextStep() {
-      if (currentStep < totalSteps) {
-        currentStep++;
-        updateProgress();
-        onStepEnter(currentStep);
-      }
-    }
-    
-    function prevStep() {
-      if (currentStep > 1) {
-        currentStep--;
-        updateProgress();
-      }
-    }
-    
-    async function onStepEnter(step) {
-      if (step === 2) {
-        await checkCodexStatus();
-      } else if (step === 3) {
-        await generateKey();
-      } else if (step === 5) {
-        updateFinalSummary();
-      }
-    }
-    
-    async function checkCodexStatus() {
+    // Codex
+    async function checkCodex() {
       try {
-        const status = await window.electronAPI.getCodexStatus();
+        const status = await window.electronAPI.codexStatus();
         
-        const installedEl = document.getElementById('codex-installed');
-        const versionEl = document.getElementById('codex-version');
-        const authEl = document.getElementById('codex-auth');
-        const helpEl = document.getElementById('codex-help');
-        const nextBtn = document.getElementById('codex-next');
+        document.getElementById('codex-installed').textContent = status.installed ? '完了' : '未インストール';
+        document.getElementById('codex-installed').className = 'status-value ' + (status.installed ? 'status-ok' : 'status-error');
         
-        if (status.installed) {
-          installedEl.innerHTML = '<span class="status-dot status-ok"></span>インストール済み';
-          versionEl.textContent = status.version || 'Unknown';
-          
-          if (status.authenticated) {
-            authEl.innerHTML = '<span class="status-dot status-ok"></span>認証済み (' + (status.authMethod === 'chatgpt' ? 'ChatGPT' : 'APIキー') + ')';
-            nextBtn.disabled = false;
-            helpEl.textContent = '✓ Codex CLIは正常に設定されています。';
-          } else {
-            authEl.innerHTML = '<span class="status-dot status-error"></span>未認証';
-            helpEl.innerHTML = '❌ Codex CLIの認証が必要です。ターミナルで <code>codex auth</code> を実行してください。';
-            nextBtn.disabled = true;
-          }
-        } else {
-          installedEl.innerHTML = '<span class="status-dot status-error"></span>未インストール';
-          helpEl.innerHTML = '❌ Codex CLIがインストールされていません。<br><code>npm i -g @openai/codex</code> でインストールしてください。';
-          nextBtn.disabled = true;
-        }
-      } catch (error) {
-        console.error('Error checking codex status:', error);
+        document.getElementById('codex-auth').textContent = status.authenticated ? '完了' : '未認証';
+        document.getElementById('codex-auth').className = 'status-value ' + (status.authenticated ? 'status-ok' : 'status-warn');
+        
+        document.getElementById('codex-version').textContent = status.version || '-';
+        
+        document.getElementById('codex-actions').style.display = 'flex';
+        document.getElementById('install-btn').style.display = status.installed ? 'none' : 'block';
+        document.getElementById('auth-btn').style.display = (status.installed && !status.authenticated) ? 'block' : 'none';
+        
+        document.getElementById('step2-next').disabled = !status.installed || !status.authenticated;
+      } catch (e) {
+        console.error(e);
       }
     }
     
+    async function installCodex() {
+      await window.electronAPI.openExternal('https://github.com/openai/codex');
+    }
+    
+    async function authCodex() {
+      await window.electronAPI.codexAuth();
+      setTimeout(checkCodex, 2000);
+    }
+    
+    // Key
     async function generateKey() {
-      try {
-        const key = await window.electronAPI.generateMasterKey();
-        document.getElementById('master-key').value = key;
-      } catch (error) {
-        console.error('Error generating key:', error);
-      }
+      const key = await window.electronAPI.generateMasterKey();
+      document.getElementById('master-key').value = key;
+      document.getElementById('step3-next').disabled = false;
     }
     
-    async function saveMasterKey() {
+    // Port
+    document.getElementById('port').addEventListener('input', function() {
+      document.getElementById('access-url').textContent = 'http://localhost:' + this.value;
+    });
+    
+    // Summary
+    function updateSummary() {
+      document.getElementById('summary-port').textContent = document.getElementById('port').value;
       const key = document.getElementById('master-key').value;
-      if (!key) {
-        alert('マスターキーを生成してください');
-        return;
-      }
-      await window.electronAPI.setConfig('masterKey', key);
-      nextStep();
+      document.getElementById('summary-key').textContent = key ? key.substring(0, 12) + '...' : '-';
     }
     
-    async function savePort() {
-      const port = parseInt(document.getElementById('port').value);
-      if (isNaN(port) || port < 1 || port > 65535) {
-        alert('有効なポート番号を入力してください (1-65535)');
-        return;
-      }
-      await window.electronAPI.setConfig('port', port);
-      nextStep();
-    }
-    
-    async function updateFinalSummary() {
-      const config = await window.electronAPI.getConfig();
-      document.getElementById('final-url').textContent = `http://localhost:${config.port}`;
-      document.getElementById('final-key').textContent = config.masterKey.slice(0, 12) + '...';
-    }
-    
+    // Complete
     async function completeSetup() {
-      const btn = document.getElementById('complete-btn');
-      btn.innerHTML = '<span class="spinner"></span>起動中...';
-      btn.disabled = true;
+      const port = parseInt(document.getElementById('port').value);
+      const masterKey = document.getElementById('master-key').value;
       
-      try {
-        // Start server
-        const result = await window.electronAPI.startServer();
-        
-        if (result.running) {
-          // Complete onboarding
-          await window.electronAPI.completeOnboarding();
-        } else {
-          alert('サーバーの起動に失敗しました: ' + (result.error || 'Unknown error'));
-          btn.innerHTML = '🚀 サーバーを起動';
-          btn.disabled = false;
-        }
-      } catch (error) {
-        alert('エラーが発生しました: ' + error.message);
-        btn.innerHTML = '🚀 サーバーを起動';
-        btn.disabled = false;
-      }
+      await window.electronAPI.setConfig('port', port);
+      await window.electronAPI.setConfig('masterKey', masterKey);
+      await window.electronAPI.completeOnboarding();
     }
     
-    // Initialize
-    updateProgress();
+    // Init
+    (async () => {
+      try {
+        const config = await window.electronAPI.getConfig();
+        if (config.masterKey) {
+          document.getElementById('master-key').value = config.masterKey;
+          document.getElementById('step3-next').disabled = false;
+        }
+        if (config.port) {
+          document.getElementById('port').value = config.port;
+          document.getElementById('access-url').textContent = 'http://localhost:' + config.port;
+        }
+      } catch (e) {}
+    })();
   </script>
 </body>
 </html>
