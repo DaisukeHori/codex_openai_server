@@ -381,6 +381,50 @@ export class ClaudeManager {
         name: info.displayName,
       }));
   }
+
+  // Install Claude CLI via npm
+  async install(
+    onProgress: (message: string) => void
+  ): Promise<{ success: boolean; message: string }> {
+    return new Promise((resolve) => {
+      onProgress('npm install -g @anthropic-ai/claude-code を実行中...');
+
+      const proc = spawn('npm', ['install', '-g', '@anthropic-ai/claude-code'], {
+        shell: true,
+        env: { ...process.env },
+      });
+
+      let output = '';
+      let errorOutput = '';
+
+      proc.stdout?.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        onProgress(text);
+      });
+
+      proc.stderr?.on('data', (data) => {
+        const text = data.toString();
+        errorOutput += text;
+        // npm outputs progress to stderr, so show it
+        onProgress(text);
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          // Re-find claude path after installation
+          this.findClaudePath();
+          resolve({ success: true, message: 'Claude CLI のインストールが完了しました' });
+        } else {
+          resolve({ success: false, message: errorOutput || `インストールに失敗しました (exit code: ${code})` });
+        }
+      });
+
+      proc.on('error', (err) => {
+        resolve({ success: false, message: `インストールエラー: ${err.message}` });
+      });
+    });
+  }
 }
 
 export const claudeManager = new ClaudeManager();

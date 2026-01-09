@@ -109,6 +109,21 @@ ipcMain.handle('claude:status', async () => {
   return await claudeManager.getStatus();
 });
 
+// CLI Installation
+ipcMain.handle('codex:install', async (event) => {
+  const webContents = event.sender;
+  return await codexManager.install((message) => {
+    webContents.send('install:progress', { provider: 'codex', message });
+  });
+});
+
+ipcMain.handle('claude:install', async (event) => {
+  const webContents = event.sender;
+  return await claudeManager.install((message) => {
+    webContents.send('install:progress', { provider: 'claude', message });
+  });
+});
+
 // Server
 ipcMain.handle('server:start', async () => {
   const config = configManager.getServerConfig();

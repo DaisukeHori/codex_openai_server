@@ -10,9 +10,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Codex
   getCodexStatus: () => ipcRenderer.invoke('codex:status'),
   runCodexAuth: () => ipcRenderer.invoke('codex:auth'),
+  installCodex: () => ipcRenderer.invoke('codex:install'),
 
   // Claude
   getClaudeStatus: () => ipcRenderer.invoke('claude:status'),
+  installClaude: () => ipcRenderer.invoke('claude:install'),
 
   // Server
   startServer: () => ipcRenderer.invoke('server:start'),
@@ -40,6 +42,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTunnelStatus: (callback: (status: any) => void) => {
     ipcRenderer.on('tunnel:statusUpdate', (_, status) => callback(status));
   },
+  onInstallProgress: (callback: (data: { provider: string; message: string }) => void) => {
+    ipcRenderer.on('install:progress', (_, data) => callback(data));
+  },
 });
 
 // Type definitions for renderer
@@ -51,7 +56,9 @@ declare global {
       generateMasterKey: () => Promise<string>;
       getCodexStatus: () => Promise<any>;
       runCodexAuth: () => Promise<any>;
+      installCodex: () => Promise<{ success: boolean; message: string }>;
       getClaudeStatus: () => Promise<any>;
+      installClaude: () => Promise<{ success: boolean; message: string }>;
       startServer: () => Promise<any>;
       stopServer: () => Promise<void>;
       getServerStatus: () => Promise<any>;
@@ -65,6 +72,7 @@ declare global {
       openExternal: (url: string) => Promise<void>;
       onServerStatus: (callback: (status: any) => void) => void;
       onTunnelStatus: (callback: (status: any) => void) => void;
+      onInstallProgress: (callback: (data: { provider: string; message: string }) => void) => void;
     };
   }
 }
