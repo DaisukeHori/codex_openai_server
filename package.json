@@ -52,6 +52,7 @@
     },
     "files": [
       "dist/**/*",
+      "src/renderer/**/*",
       "node_modules/**/*"
     ],
     "win": {
