@@ -165,3 +165,47 @@ export function getModelsByProvider(): { codex: ModelInfo[]; claude: ModelInfo[]
     claude: all.filter(m => m.provider === 'claude'),
   };
 }
+
+/**
+ * Run with streaming through the appropriate provider
+ */
+export function runWithHistoryStream(
+  history: Array<{ role: string; content: string }>,
+  model: string,
+  onData: (chunk: string) => void,
+  onEnd: (fullOutput: string) => void,
+  onError: (error: Error) => void
+): { processId: string; provider: Provider } {
+  const provider = getProvider(model);
+
+  // Format history as prompt
+  const formattedHistory = history.map(msg => {
+    const roleLabel = msg.role === 'user' ? 'Human' : 'Assistant';
+    return `${roleLabel}: ${msg.content}`;
+  }).join('\n\n');
+
+  const prompt = provider === 'claude'
+    ? `Here is a conversation history. Please continue as the Assistant:\n\n${formattedHistory}\n\nAssistant:`
+    : history.map(msg => `${msg.role}: ${msg.content}`).join('\n');
+
+  if (provider === 'claude') {
+    const processId = claudeManager.spawnInteractive(
+      prompt,
+      model,
+      onData,
+      onEnd,
+      onError
+    );
+    return { processId, provider: 'claude' };
+  }
+
+  // Codex
+  const processId = codexManager.spawnInteractive(
+    prompt,
+    model,
+    onData,
+    onEnd,
+    onError
+  );
+  return { processId, provider: 'codex' };
+}

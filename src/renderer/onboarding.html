@@ -343,6 +343,49 @@
       gap: 8px;
       margin-top: 16px;
     }
+
+    /* Install progress */
+    .install-progress {
+      margin-top: 12px;
+      padding: 12px;
+      background: #f5f5f5;
+      border-radius: 6px;
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 11px;
+      max-height: 120px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .install-progress.visible {
+      display: block;
+    }
+
+    .install-progress .log-line {
+      color: #666;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .btn-installing {
+      opacity: 0.7;
+      cursor: wait;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 1s linear infinite;
+      margin-right: 6px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -357,7 +400,7 @@
         </div>
         <div class="nav-item" data-step="2">
           <span class="nav-num">2</span>
-          <span>Codex CLI</span>
+          <span>LLMプロバイダー</span>
         </div>
         <div class="nav-item" data-step="3">
           <span class="nav-num">3</span>
@@ -411,11 +454,13 @@
       <!-- Step 2 -->
       <div class="step" data-step="2">
         <div class="header">
-          <h1>Codex CLI</h1>
-          <p>Codex CLIのインストールと認証を確認します</p>
+          <h1>LLMプロバイダー</h1>
+          <p>Codex CLI または Claude CLI のいずれかの認証を完了してください</p>
         </div>
-        <div class="body">
-          <div class="card">
+        <div class="body" style="display: flex; gap: 20px; flex-wrap: wrap;">
+          <!-- Codex CLI -->
+          <div class="card" style="flex: 1; min-width: 280px;">
+            <h3 style="margin-bottom: 15px; font-size: 16px;">OpenAI Codex CLI</h3>
             <div class="status-row">
               <span class="status-label">インストール</span>
               <span id="codex-installed" class="status-value">確認中...</span>
@@ -428,13 +473,41 @@
               <span class="status-label">バージョン</span>
               <span id="codex-version" class="status-value">-</span>
             </div>
+            <div class="actions" id="codex-actions" style="display:none; margin-top: 15px;">
+              <button class="btn btn-primary" onclick="installCodex()" id="codex-install-btn" style="display:none;">
+                <span class="btn-text">インストール</span>
+              </button>
+              <button class="btn btn-secondary" onclick="authCodex()" id="codex-auth-btn" style="display:none;">認証する</button>
+              <button class="btn btn-secondary" onclick="checkProviders()" id="codex-refresh-btn">再確認</button>
+            </div>
+            <div class="install-progress" id="codex-progress"></div>
           </div>
-          <div class="actions" id="codex-actions" style="display:none;">
-            <button class="btn btn-secondary" onclick="installCodex()" id="install-btn" style="display:none;">インストール</button>
-            <button class="btn btn-secondary" onclick="authCodex()" id="auth-btn" style="display:none;">認証する</button>
-            <button class="btn btn-secondary" onclick="checkCodex()">再確認</button>
+
+          <!-- Claude CLI -->
+          <div class="card" style="flex: 1; min-width: 280px;">
+            <h3 style="margin-bottom: 15px; font-size: 16px;">Anthropic Claude CLI</h3>
+            <div class="status-row">
+              <span class="status-label">インストール</span>
+              <span id="claude-installed" class="status-value">確認中...</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">認証</span>
+              <span id="claude-auth" class="status-value">確認中...</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">バージョン</span>
+              <span id="claude-version" class="status-value">-</span>
+            </div>
+            <div class="actions" id="claude-actions" style="display:none; margin-top: 15px;">
+              <button class="btn btn-primary" onclick="installClaudeCLI()" id="claude-install-btn" style="display:none;">
+                <span class="btn-text">インストール</span>
+              </button>
+              <button class="btn btn-secondary" onclick="checkProviders()" id="claude-refresh-btn">再確認</button>
+            </div>
+            <div class="install-progress" id="claude-progress"></div>
           </div>
         </div>
+        <p id="provider-status" style="text-align: center; margin-top: 15px; color: #888;"></p>
         <div class="footer">
           <button class="btn btn-secondary" onclick="goToStep(1)">戻る</button>
           <button class="btn btn-primary" onclick="goToStep(3)" id="step2-next" disabled>次へ</button>
@@ -534,41 +607,190 @@
       });
       
       currentStep = step;
-      
-      if (step === 2) checkCodex();
+
+      if (step === 2) checkProviders();
       if (step === 5) updateSummary();
     }
-    
-    // Codex
-    async function checkCodex() {
+
+    // LLM Providers
+    let codexStatus = null;
+    let claudeStatus = null;
+    let installingCodex = false;
+    let installingClaude = false;
+
+    // Set up install progress listener
+    window.electronAPI.onInstallProgress((data) => {
+      const progressEl = document.getElementById(`${data.provider}-progress`);
+      if (progressEl) {
+        progressEl.classList.add('visible');
+        const line = document.createElement('div');
+        line.className = 'log-line';
+        line.textContent = data.message.trim();
+        progressEl.appendChild(line);
+        progressEl.scrollTop = progressEl.scrollHeight;
+      }
+    });
+
+    async function checkProviders() {
       try {
-        const status = await window.electronAPI.codexStatus();
-        
-        document.getElementById('codex-installed').textContent = status.installed ? '完了' : '未インストール';
-        document.getElementById('codex-installed').className = 'status-value ' + (status.installed ? 'status-ok' : 'status-error');
-        
-        document.getElementById('codex-auth').textContent = status.authenticated ? '完了' : '未認証';
-        document.getElementById('codex-auth').className = 'status-value ' + (status.authenticated ? 'status-ok' : 'status-warn');
-        
-        document.getElementById('codex-version').textContent = status.version || '-';
-        
+        // Check both providers in parallel
+        const [codex, claude] = await Promise.all([
+          window.electronAPI.getCodexStatus().catch(() => ({ installed: false, authenticated: false })),
+          window.electronAPI.getClaudeStatus().catch(() => ({ installed: false, authenticated: false }))
+        ]);
+
+        codexStatus = codex;
+        claudeStatus = claude;
+
+        // Update Codex UI
+        document.getElementById('codex-installed').textContent = codex.installed ? '完了' : '未インストール';
+        document.getElementById('codex-installed').className = 'status-value ' + (codex.installed ? 'status-ok' : 'status-error');
+        document.getElementById('codex-auth').textContent = codex.authenticated ? '完了' : '未認証';
+        document.getElementById('codex-auth').className = 'status-value ' + (codex.authenticated ? 'status-ok' : 'status-warn');
+        document.getElementById('codex-version').textContent = codex.version || '-';
         document.getElementById('codex-actions').style.display = 'flex';
-        document.getElementById('install-btn').style.display = status.installed ? 'none' : 'block';
-        document.getElementById('auth-btn').style.display = (status.installed && !status.authenticated) ? 'block' : 'none';
-        
-        document.getElementById('step2-next').disabled = !status.installed || !status.authenticated;
+        document.getElementById('codex-install-btn').style.display = codex.installed ? 'none' : 'block';
+        document.getElementById('codex-auth-btn').style.display = (codex.installed && !codex.authenticated) ? 'block' : 'none';
+
+        // Update Claude UI
+        document.getElementById('claude-installed').textContent = claude.installed ? '完了' : '未インストール';
+        document.getElementById('claude-installed').className = 'status-value ' + (claude.installed ? 'status-ok' : 'status-error');
+        document.getElementById('claude-auth').textContent = claude.authenticated ? '完了' : '未認証';
+        document.getElementById('claude-auth').className = 'status-value ' + (claude.authenticated ? 'status-ok' : 'status-warn');
+        document.getElementById('claude-version').textContent = claude.version || '-';
+        document.getElementById('claude-actions').style.display = 'flex';
+        document.getElementById('claude-install-btn').style.display = claude.installed ? 'none' : 'block';
+
+        // Enable next button if at least one provider is authenticated
+        const anyAuthenticated = codex.authenticated || claude.authenticated;
+        document.getElementById('step2-next').disabled = !anyAuthenticated;
+
+        // Update status message
+        const statusEl = document.getElementById('provider-status');
+        if (anyAuthenticated) {
+          const providers = [];
+          if (codex.authenticated) providers.push('Codex');
+          if (claude.authenticated) providers.push('Claude');
+          statusEl.textContent = `✓ ${providers.join(' と ')} が利用可能です`;
+          statusEl.style.color = '#10b981';
+        } else {
+          statusEl.textContent = 'いずれかのプロバイダーを認証してください';
+          statusEl.style.color = '#f59e0b';
+        }
       } catch (e) {
         console.error(e);
       }
     }
-    
+
     async function installCodex() {
-      await window.electronAPI.openExternal('https://github.com/openai/codex');
+      if (installingCodex) return;
+      installingCodex = true;
+
+      const btn = document.getElementById('codex-install-btn');
+      const progressEl = document.getElementById('codex-progress');
+
+      // Show installing state
+      btn.classList.add('btn-installing');
+      btn.innerHTML = '<span class="spinner"></span>インストール中...';
+      btn.disabled = true;
+      progressEl.innerHTML = '';
+      progressEl.classList.add('visible');
+
+      try {
+        const result = await window.electronAPI.installCodex();
+
+        if (result.success) {
+          const line = document.createElement('div');
+          line.className = 'log-line';
+          line.style.color = '#10b981';
+          line.textContent = '✓ ' + result.message;
+          progressEl.appendChild(line);
+
+          // Re-check status after successful install
+          setTimeout(checkProviders, 1000);
+        } else {
+          const line = document.createElement('div');
+          line.className = 'log-line';
+          line.style.color = '#ef4444';
+          line.textContent = '✗ ' + result.message;
+          progressEl.appendChild(line);
+
+          // Reset button
+          btn.classList.remove('btn-installing');
+          btn.innerHTML = '<span class="btn-text">インストール</span>';
+          btn.disabled = false;
+        }
+      } catch (e) {
+        const line = document.createElement('div');
+        line.className = 'log-line';
+        line.style.color = '#ef4444';
+        line.textContent = '✗ エラー: ' + e.message;
+        progressEl.appendChild(line);
+
+        btn.classList.remove('btn-installing');
+        btn.innerHTML = '<span class="btn-text">インストール</span>';
+        btn.disabled = false;
+      }
+
+      installingCodex = false;
     }
-    
+
+    async function installClaudeCLI() {
+      if (installingClaude) return;
+      installingClaude = true;
+
+      const btn = document.getElementById('claude-install-btn');
+      const progressEl = document.getElementById('claude-progress');
+
+      // Show installing state
+      btn.classList.add('btn-installing');
+      btn.innerHTML = '<span class="spinner"></span>インストール中...';
+      btn.disabled = true;
+      progressEl.innerHTML = '';
+      progressEl.classList.add('visible');
+
+      try {
+        const result = await window.electronAPI.installClaude();
+
+        if (result.success) {
+          const line = document.createElement('div');
+          line.className = 'log-line';
+          line.style.color = '#10b981';
+          line.textContent = '✓ ' + result.message;
+          progressEl.appendChild(line);
+
+          // Re-check status after successful install
+          setTimeout(checkProviders, 1000);
+        } else {
+          const line = document.createElement('div');
+          line.className = 'log-line';
+          line.style.color = '#ef4444';
+          line.textContent = '✗ ' + result.message;
+          progressEl.appendChild(line);
+
+          // Reset button
+          btn.classList.remove('btn-installing');
+          btn.innerHTML = '<span class="btn-text">インストール</span>';
+          btn.disabled = false;
+        }
+      } catch (e) {
+        const line = document.createElement('div');
+        line.className = 'log-line';
+        line.style.color = '#ef4444';
+        line.textContent = '✗ エラー: ' + e.message;
+        progressEl.appendChild(line);
+
+        btn.classList.remove('btn-installing');
+        btn.innerHTML = '<span class="btn-text">インストール</span>';
+        btn.disabled = false;
+      }
+
+      installingClaude = false;
+    }
+
     async function authCodex() {
-      await window.electronAPI.codexAuth();
-      setTimeout(checkCodex, 2000);
+      await window.electronAPI.runCodexAuth();
+      setTimeout(checkProviders, 2000);
     }
     
     // Key

@@ -196,6 +196,8 @@
         deleteResponse: (id) => fetch(`${baseUrl}/v1/responses/${id}`, { method: 'DELETE', headers }).then(handle),
         createResponse: (data) => fetch(`${baseUrl}/v1/responses`, { method: 'POST', headers, body: JSON.stringify(data) }).then(handle),
         chatCompletion: (data) => fetch(`${baseUrl}/v1/chat/completions`, { method: 'POST', headers, body: JSON.stringify(data) }).then(handle),
+        // Models API
+        listModels: () => fetch(`${baseUrl}/v1/models`, { headers }).then(handle),
         // Tunnel API
         tunnelStatus: () => fetch(`${baseUrl}/admin/tunnel/status`, { headers }).then(handle),
         tunnelStart: () => fetch(`${baseUrl}/admin/tunnel/start`, { method: 'POST', headers }).then(handle),
@@ -404,8 +406,8 @@
                 <div>
                   <h3 className="font-semibold">サーバー状態</h3>
                   <p className="text-sm text-[var(--text-muted)]">
-                    {health?.codex?.authenticated ? '✓ Codex認証済み' : '✗ Codex未認証'} • 
-                    {health?.codex?.authMethod === 'chatgpt' ? ' ChatGPTアカウント' : ' APIキー'}
+                    {health?.codex?.authenticated ? '✓ Codex' : '✗ Codex'} •
+                    {health?.claude?.authenticated ? '✓ Claude' : '✗ Claude'}
                   </p>
                 </div>
               </div>
@@ -1117,6 +1119,7 @@
     const SettingsPage = ({ api, serverUrl, showToast }) => {
       const [health, setHealth] = useState(null);
       const [config, setConfig] = useState(null);
+      const [models, setModels] = useState([]);
       const [tunnel, setTunnel] = useState({ active: false, url: null });
       const [loading, setLoading] = useState(true);
       const [tunnelLoading, setTunnelLoading] = useState(false);
@@ -1131,14 +1134,16 @@
 
       const loadData = useCallback(async () => {
         try {
-          const [h, c, t] = await Promise.all([
+          const [h, c, t, m] = await Promise.all([
             api.health(),
             api.getConfig().catch(() => null),
             api.tunnelStatus().catch(() => ({ active: false })),
+            api.listModels().catch(() => ({ data: [] })),
           ]);
           setHealth(h);
           setConfig(c);
           setTunnel(t);
+          setModels(m.data || []);
           if (c?.port) setPortInput(String(c.port));
         } catch (e) {
           showToast('読み込み失敗', 'error');
@@ -1183,6 +1188,16 @@
           showToast(result.requiresRestart ? 'ポート設定を保存しました（再起動後に適用）' : '設定を更新しました', 'success');
         } catch (e) {
           showToast('設定更新失敗', 'error');
+        }
+      };
+
+      const handleModelChange = async (newModel) => {
+        try {
+          await api.updateConfig({ defaultModel: newModel });
+          setHealth(prev => ({ ...prev, config: { ...prev?.config, defaultModel: newModel } }));
+          showToast('デフォルトモデルを変更しました', 'success');
+        } catch (e) {
+          showToast('モデル変更失敗', 'error');
         }
       };
 
@@ -1329,7 +1344,22 @@
               </div>
               <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
                 <span className="text-[var(--text-secondary)]">デフォルトモデル</span>
-                <code className="bg-[var(--bg-tertiary)] px-3 py-1 rounded-lg text-sm">{health?.config?.defaultModel}</code>
+                <select
+                  value={health?.config?.defaultModel || ''}
+                  onChange={(e) => handleModelChange(e.target.value)}
+                  className="input-field w-auto min-w-[200px]"
+                >
+                  <optgroup label="OpenAI / Codex">
+                    {models.filter(m => m.provider === 'codex').map(m => (
+                      <option key={m.id} value={m.id}>{m.id}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Anthropic / Claude">
+                    {models.filter(m => m.provider === 'claude').map(m => (
+                      <option key={m.id} value={m.id}>{m.id}</option>
+                    ))}
+                  </optgroup>
+                </select>
               </div>
               <div className="flex items-center justify-between py-3">
                 <span className="text-[var(--text-secondary)]">デバッグモード</span>
@@ -1377,6 +1407,33 @@
               <div className="flex items-center justify-between py-3">
                 <span className="text-[var(--text-secondary)]">認証方法</span>
                 <span>{health?.codex?.authMethod === 'chatgpt' ? 'ChatGPTアカウント' : health?.codex?.authMethod === 'api_key' ? 'APIキー' : '-'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Claude CLI */}
+          <div className="card p-6">
+            <h3 className="font-semibold mb-4">Claude CLI</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <span className="text-[var(--text-secondary)]">インストール</span>
+                <span className={health?.claude?.installed ? 'text-green-500' : 'text-red-500'}>
+                  {health?.claude?.installed ? '✓ インストール済み' : '✗ 未インストール'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <span className="text-[var(--text-secondary)]">バージョン</span>
+                <code className="bg-[var(--bg-tertiary)] px-3 py-1 rounded-lg text-sm">{health?.claude?.version || '-'}</code>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <span className="text-[var(--text-secondary)]">認証状態</span>
+                <span className={health?.claude?.authenticated ? 'text-green-500' : 'text-red-500'}>
+                  {health?.claude?.authenticated ? '✓ 認証済み' : '✗ 未認証'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <span className="text-[var(--text-secondary)]">認証方法</span>
+                <span>{health?.claude?.authMethod === 'api_key' ? 'APIキー' : health?.claude?.authMethod === 'subscription' ? 'サブスクリプション' : '-'}</span>
               </div>
             </div>
           </div>

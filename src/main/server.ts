@@ -8,7 +8,7 @@ import { configManager } from './config';
 import { codexManager } from './codex';
 import { claudeManager } from './claude';
 import { tunnelManager } from './tunnel';
-import { getProvider, getModelInfo, runWithHistory, getAllModels, Provider } from './model-router';
+import { getProvider, getModelInfo, runWithHistory, runWithHistoryStream, getAllModels, Provider } from './model-router';
 
 let server: any = null;
 let db: Database.Database | null = null;
@@ -262,6 +262,81 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
 
       // Add current user input
       history.push({ role: 'user', content: userContent });
+
+      // Handle streaming
+      if (stream) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        let fullOutput = '';
+
+        const { processId, provider: resultProvider } = runWithHistoryStream(
+          history,
+          model,
+          // onData
+          (chunk: string) => {
+            fullOutput += chunk;
+            const event = {
+              id: responseId,
+              object: 'response.output_text.delta',
+              delta: chunk,
+            };
+            res.write(`data: ${JSON.stringify(event)}\n\n`);
+          },
+          // onEnd
+          (output: string) => {
+            // Save to database
+            const usage = {
+              input_tokens: Math.ceil(history.map(h => h.content).join('').length / 4),
+              output_tokens: Math.ceil(output.length / 4),
+              total_tokens: Math.ceil((history.map(h => h.content).join('').length + output.length) / 4),
+            };
+
+            db!.prepare(`
+              INSERT INTO responses (id, model, provider, status, input, output, output_text, conversation_history, previous_response_id, usage, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              responseId,
+              model,
+              resultProvider,
+              'completed',
+              JSON.stringify(input),
+              JSON.stringify([{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: output }] }]),
+              output,
+              JSON.stringify(history),
+              previous_response_id || null,
+              JSON.stringify(usage),
+              createdAt
+            );
+
+            // Send done event
+            const doneEvent = {
+              id: responseId,
+              object: 'response.completed',
+              model,
+              provider: resultProvider,
+              output_text: output,
+              usage,
+            };
+            res.write(`data: ${JSON.stringify(doneEvent)}\n\n`);
+            res.write('data: [DONE]\n\n');
+            res.end();
+          },
+          // onError
+          (error: Error) => {
+            const errorEvent = {
+              id: responseId,
+              object: 'response.error',
+              error: { message: error.message },
+            };
+            res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
+            res.end();
+          }
+        );
+
+        return;
+      }
 
       try {
         // Run through model router (automatically selects Codex or Claude)
@@ -566,7 +641,30 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
         tunnel: tunnelManager.getStatus(),
       });
     });
-    
+
+    app.patch('/admin/config', authMiddleware, (req, res) => {
+      const { port, defaultModel } = req.body;
+      let requiresRestart = false;
+
+      if (port !== undefined) {
+        configManager.set('port', port);
+        requiresRestart = true;
+      }
+
+      if (defaultModel !== undefined) {
+        configManager.set('defaultModel', defaultModel);
+      }
+
+      res.json({
+        success: true,
+        requiresRestart,
+        config: {
+          port: configManager.get('port'),
+          defaultModel: configManager.get('defaultModel'),
+        },
+      });
+    });
+
     // ========================================
     // Serve Admin UI
     // ========================================
