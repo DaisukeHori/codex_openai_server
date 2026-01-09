@@ -10,7 +10,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Codex
   getCodexStatus: () => ipcRenderer.invoke('codex:status'),
   runCodexAuth: () => ipcRenderer.invoke('codex:auth'),
-  
+
+  // Claude
+  getClaudeStatus: () => ipcRenderer.invoke('claude:status'),
+
   // Server
   startServer: () => ipcRenderer.invoke('server:start'),
   stopServer: () => ipcRenderer.invoke('server:stop'),
@@ -48,6 +51,7 @@ declare global {
       generateMasterKey: () => Promise<string>;
       getCodexStatus: () => Promise<any>;
       runCodexAuth: () => Promise<any>;
+      getClaudeStatus: () => Promise<any>;
       startServer: () => Promise<any>;
       stopServer: () => Promise<void>;
       getServerStatus: () => Promise<any>;

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'path';
 import { configManager } from './config';
 import { codexManager } from './codex';
+import { claudeManager } from './claude';
 import { tunnelManager } from './tunnel';
 import { startServer, stopServer, getServerStatus } from './server';
 import { createTray, destroyTray } from './tray';
@@ -101,6 +102,11 @@ ipcMain.handle('codex:status', async () => {
 ipcMain.handle('codex:auth', async () => {
   // Open auth in terminal/browser
   return await codexManager.runAuth();
+});
+
+// Claude
+ipcMain.handle('claude:status', async () => {
+  return await claudeManager.getStatus();
 });
 
 // Server

@@ -6,7 +6,9 @@ import { app as electronApp } from 'electron';
 import Database from 'better-sqlite3';
 import { configManager } from './config';
 import { codexManager } from './codex';
+import { claudeManager } from './claude';
 import { tunnelManager } from './tunnel';
+import { getProvider, getModelInfo, runWithHistory, getAllModels, Provider } from './model-router';
 
 let server: any = null;
 let db: Database.Database | null = null;
@@ -25,10 +27,13 @@ function initDatabase(dbPath: string) {
     CREATE TABLE IF NOT EXISTS responses (
       id TEXT PRIMARY KEY,
       model TEXT,
+      provider TEXT DEFAULT 'codex',
       status TEXT DEFAULT 'completed',
       input TEXT,
       output TEXT,
       output_text TEXT,
+      conversation_history TEXT,
+      previous_response_id TEXT,
       usage TEXT,
       created_at INTEGER,
       metadata TEXT
@@ -130,8 +135,9 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
     
     app.get('/health', async (req, res) => {
       const codexStatus = await codexManager.getStatus();
+      const claudeStatus = await claudeManager.getStatus();
       const tunnelStatus = tunnelManager.getStatus();
-      
+
       res.json({
         status: 'ok',
         codex: {
@@ -139,6 +145,12 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
           version: codexStatus.version,
           authenticated: codexStatus.authenticated,
           authMethod: codexStatus.authMethod,
+        },
+        claude: {
+          installed: claudeStatus.installed,
+          version: claudeStatus.version,
+          authenticated: claudeStatus.authenticated,
+          authMethod: claudeStatus.authMethod,
         },
         tunnel: tunnelStatus,
         config: {
@@ -154,21 +166,17 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
     // ========================================
     // Models
     // ========================================
-    
-    const MODELS = [
-      'gpt-5.2-codex', 'gpt-5.1-codex', 'gpt-5.2', 'gpt-5.1', 'gpt-5',
-      'gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini',
-      'o3', 'o3-mini', 'o4-mini', 'o1', 'o1-mini',
-    ];
-    
+
     app.get('/v1/models', (req, res) => {
+      const models = getAllModels();
       res.json({
         object: 'list',
-        data: MODELS.map(id => ({
-          id,
+        data: models.map(m => ({
+          id: m.id,
           object: 'model',
           created: 1704067200,
-          owned_by: 'openai',
+          owned_by: m.owned_by,
+          provider: m.provider,
         })),
       });
     });
@@ -176,59 +184,125 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
     // ========================================
     // Responses API
     // ========================================
-    
+
+    // Helper: Build conversation history from previous responses
+    function buildConversationHistory(previousResponseId: string): Array<{ role: string; content: string }> {
+      const history: Array<{ role: string; content: string }> = [];
+      let currentId: string | null = previousResponseId;
+
+      // Traverse the chain of responses
+      const visited = new Set<string>();
+      while (currentId && !visited.has(currentId)) {
+        visited.add(currentId);
+        const row = db!.prepare('SELECT * FROM responses WHERE id = ?').get(currentId) as any;
+        if (!row) break;
+
+        // Get the input (user message)
+        let userContent = '';
+        try {
+          const inputData = JSON.parse(row.input);
+          if (typeof inputData === 'string') {
+            userContent = inputData;
+          } else if (Array.isArray(inputData)) {
+            userContent = inputData.map((m: any) => m.content).join('\n');
+          }
+        } catch {
+          userContent = row.input || '';
+        }
+
+        // Add user message and assistant response (in reverse order since we're going backwards)
+        history.unshift({ role: 'assistant', content: row.output_text || '' });
+        history.unshift({ role: 'user', content: userContent });
+
+        // Move to previous response
+        currentId = row.previous_response_id;
+      }
+
+      return history;
+    }
+
     app.post('/v1/responses', authMiddleware, async (req, res) => {
-      const { model = configManager.get('defaultModel'), input, instructions, stream } = req.body;
-      
+      const {
+        model = configManager.get('defaultModel'),
+        input,
+        instructions,
+        previous_response_id,
+        stream
+      } = req.body;
+
       if (!input) {
         res.status(400).json({ error: { message: 'input is required' } });
         return;
       }
-      
+
       const responseId = `resp_${uuidv4().replace(/-/g, '')}`;
       const createdAt = Math.floor(Date.now() / 1000);
-      
-      // Convert input to prompt
-      let prompt = '';
+      const provider = getProvider(model);
+
+      // Convert input to user message
+      let userContent = '';
       if (typeof input === 'string') {
-        prompt = input;
+        userContent = input;
       } else if (Array.isArray(input)) {
-        prompt = input.map((m: any) => `${m.role}: ${m.content}`).join('\n');
+        userContent = input.map((m: any) => m.content || m).join('\n');
       }
-      
+
+      // Build conversation history
+      let history: Array<{ role: string; content: string }> = [];
+
+      // Include previous conversation if specified
+      if (previous_response_id) {
+        history = buildConversationHistory(previous_response_id);
+      }
+
+      // Add instructions as system context if provided
       if (instructions) {
-        prompt = `${instructions}\n\n${prompt}`;
+        history.unshift({ role: 'system', content: instructions });
       }
-      
+
+      // Add current user input
+      history.push({ role: 'user', content: userContent });
+
       try {
-        // Run codex
-        const output = await codexManager.runCommand(['-m', model, '-p', prompt]);
-        
+        // Run through model router (automatically selects Codex or Claude)
+        const result = await runWithHistory(history, model);
+        const output = result.output;
+
         const response = {
           id: responseId,
           object: 'response',
           created_at: createdAt,
           model,
+          provider: result.provider,
           status: 'completed',
+          previous_response_id: previous_response_id || null,
           output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: output }] }],
           output_text: output,
           usage: {
-            input_tokens: Math.ceil(prompt.length / 4),
+            input_tokens: Math.ceil(history.map(h => h.content).join('').length / 4),
             output_tokens: Math.ceil(output.length / 4),
-            total_tokens: Math.ceil((prompt.length + output.length) / 4),
+            total_tokens: Math.ceil((history.map(h => h.content).join('').length + output.length) / 4),
           },
         };
-        
-        // Save to database
+
+        // Save to database with conversation history
         db!.prepare(`
-          INSERT INTO responses (id, model, status, input, output, output_text, usage, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO responses (id, model, provider, status, input, output, output_text, conversation_history, previous_response_id, usage, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-          responseId, model, 'completed',
-          JSON.stringify(input), JSON.stringify(response.output),
-          output, JSON.stringify(response.usage), createdAt
+          responseId,
+          model,
+          result.provider,
+          'completed',
+          JSON.stringify(input),
+          JSON.stringify(response.output),
+          output,
+          JSON.stringify(history),
+          previous_response_id || null,
+          JSON.stringify(response.usage),
+          createdAt
         );
-        
+
         res.json(response);
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -237,6 +311,7 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
           object: 'response',
           created_at: createdAt,
           model,
+          provider,
           status: 'failed',
           error: { message: errMsg },
         });
@@ -246,35 +321,40 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
     app.get('/v1/responses', authMiddleware, (req, res) => {
       const limit = parseInt(req.query.limit as string) || 20;
       const rows = db!.prepare('SELECT * FROM responses ORDER BY created_at DESC LIMIT ?').all(limit);
-      
+
       res.json({
         object: 'list',
         data: rows.map((r: any) => ({
           id: r.id,
           object: 'response',
           model: r.model,
+          provider: r.provider || 'codex',
           status: r.status,
+          previous_response_id: r.previous_response_id,
           output_text: r.output_text,
           usage: JSON.parse(r.usage || '{}'),
           created_at: r.created_at,
         })),
       });
     });
-    
+
     app.get('/v1/responses/:id', authMiddleware, (req, res) => {
       const row = db!.prepare('SELECT * FROM responses WHERE id = ?').get(req.params.id) as any;
       if (!row) {
         res.status(404).json({ error: { message: 'Response not found' } });
         return;
       }
-      
+
       res.json({
         id: row.id,
         object: 'response',
         model: row.model,
+        provider: row.provider || 'codex',
         status: row.status,
+        previous_response_id: row.previous_response_id,
         output: JSON.parse(row.output || '[]'),
         output_text: row.output_text,
+        conversation_history: JSON.parse(row.conversation_history || '[]'),
         usage: JSON.parse(row.usage || '{}'),
         created_at: row.created_at,
       });
@@ -292,34 +372,43 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
     // ========================================
     // Chat Completions API
     // ========================================
-    
+
     app.post('/v1/chat/completions', authMiddleware, async (req, res) => {
       const { model = configManager.get('defaultModel'), messages } = req.body;
-      
+
       if (!messages || !Array.isArray(messages)) {
         res.status(400).json({ error: { message: 'messages array is required' } });
         return;
       }
-      
-      const prompt = messages.map((m: any) => `${m.role}: ${m.content}`).join('\n');
-      
+
+      // Convert messages to history format
+      const history = messages.map((m: any) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
       try {
-        const output = await codexManager.runCommand(['-m', model, '-p', prompt]);
-        
+        // Run through model router (automatically selects Codex or Claude)
+        const result = await runWithHistory(history, model);
+        const output = result.output;
+
+        const promptText = messages.map((m: any) => m.content).join('');
+
         res.json({
           id: `chatcmpl-${uuidv4().replace(/-/g, '')}`,
           object: 'chat.completion',
           created: Math.floor(Date.now() / 1000),
           model,
+          provider: result.provider,
           choices: [{
             index: 0,
             message: { role: 'assistant', content: output },
             finish_reason: 'stop',
           }],
           usage: {
-            prompt_tokens: Math.ceil(prompt.length / 4),
+            prompt_tokens: Math.ceil(promptText.length / 4),
             completion_tokens: Math.ceil(output.length / 4),
-            total_tokens: Math.ceil((prompt.length + output.length) / 4),
+            total_tokens: Math.ceil((promptText.length + output.length) / 4),
           },
         });
       } catch (error) {
@@ -516,6 +605,7 @@ export function stopServer(): void {
   }
   tunnelManager.stop();
   codexManager.killAllProcesses();
+  claudeManager.killAllProcesses();
 }
 
 export function getServerStatus(): ServerStatus {
