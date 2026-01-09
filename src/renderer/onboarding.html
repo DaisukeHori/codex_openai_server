@@ -104,7 +104,7 @@
     }
     
     .header {
-      padding: 30px 40px 0;
+      padding: 20px 30px 0;
     }
     
     .header h1 {
@@ -121,16 +121,18 @@
     
     .body {
       flex: 1;
-      padding: 30px 40px;
+      padding: 20px 30px;
       overflow-y: auto;
+      min-height: 0; /* Important for flex scroll */
     }
     
     .footer {
-      padding: 20px 40px;
+      padding: 15px 30px;
       border-top: 1px solid #e5e5e5;
       background: #fff;
       display: flex;
       justify-content: space-between;
+      flex-shrink: 0;
     }
     
     /* Steps */
@@ -138,17 +140,22 @@
       display: none;
       height: 100%;
       flex-direction: column;
+      overflow: hidden;
     }
-    
+
     .step.active {
       display: flex;
+    }
+
+    .step .header {
+      flex-shrink: 0;
     }
     
     /* Buttons */
     .btn {
-      padding: 10px 20px;
+      padding: 8px 16px;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
       cursor: pointer;
       transition: all 0.15s;
@@ -461,8 +468,8 @@
         </div>
         <div class="body" style="overflow-y: auto;">
           <!-- System Requirements -->
-          <div id="system-req-card" class="card" style="margin-bottom: 16px; display: none;">
-            <h3 style="margin-bottom: 12px; font-size: 14px;">システム要件</h3>
+          <div id="system-req-card" class="card" style="margin-bottom: 12px; display: none;">
+            <h3 style="margin-bottom: 10px; font-size: 14px;">システム要件</h3>
             <div class="status-row">
               <span class="status-label">Node.js / npm</span>
               <span id="npm-status" class="status-value">確認中...</span>
@@ -477,10 +484,10 @@
           </div>
 
           <!-- CLI Cards -->
-          <div style="display: flex; gap: 16px; flex-wrap: nowrap;">
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
           <!-- Codex CLI -->
-          <div class="card" style="flex: 1; min-width: 0;">
-            <h3 style="margin-bottom: 12px; font-size: 14px;">OpenAI Codex CLI</h3>
+          <div class="card" style="flex: 1 1 220px; min-width: 220px;">
+            <h3 style="margin-bottom: 10px; font-size: 14px;">OpenAI Codex CLI</h3>
             <div class="status-row">
               <span class="status-label">インストール</span>
               <span id="codex-installed" class="status-value">確認中...</span>
@@ -504,8 +511,8 @@
           </div>
 
           <!-- Claude CLI -->
-          <div class="card" style="flex: 1; min-width: 0;">
-            <h3 style="margin-bottom: 12px; font-size: 14px;">Anthropic Claude CLI</h3>
+          <div class="card" style="flex: 1 1 220px; min-width: 220px;">
+            <h3 style="margin-bottom: 10px; font-size: 14px;">Anthropic Claude CLI</h3>
             <div class="status-row">
               <span class="status-label">インストール</span>
               <span id="claude-installed" class="status-value">確認中...</span>
