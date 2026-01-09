@@ -221,128 +221,98 @@ ipcMain.handle('system:installNode', async (event) => {
       });
     }
   } else if (platform === 'win32') {
-    // Windows: Try winget first, then chocolatey, then open download page
+    // Windows: Open PowerShell with admin rights to install Node.js
+    webContents.send('install:progress', { provider: 'system', message: 'PowerShell を管理者権限で開いています...' });
+
+    // Check if winget is available first
     const winget = await checkCommand('winget', ['--version']);
+    let installCmd: string;
 
-    if (winget.available) {
-      return new Promise((resolve) => {
-        webContents.send('install:progress', { provider: 'system', message: 'winget install OpenJS.NodeJS を実行中...' });
+    return new Promise((resolve) => {
 
-        const proc = spawn('winget', ['install', 'OpenJS.NodeJS', '--accept-package-agreements', '--accept-source-agreements'], {
-          shell: true,
-        });
+      if (winget.available) {
+        installCmd = 'winget install OpenJS.NodeJS --accept-package-agreements --accept-source-agreements';
+      } else {
+        // Fallback: download and run the Node.js installer
+        installCmd = `
+          $url = 'https://nodejs.org/dist/v20.10.0/node-v20.10.0-x64.msi'
+          $output = "$env:TEMP\\node-installer.msi"
+          Write-Host 'Downloading Node.js...'
+          Invoke-WebRequest -Uri $url -OutFile $output
+          Write-Host 'Installing Node.js...'
+          Start-Process msiexec.exe -ArgumentList '/i', $output, '/quiet', '/norestart' -Wait
+          Remove-Item $output
+        `;
+      }
 
-        proc.stdout?.on('data', (data) => {
-          webContents.send('install:progress', { provider: 'system', message: data.toString() });
-        });
+      // Use PowerShell Start-Process with -Verb RunAs for UAC elevation
+      const psScript = `
+        ${installCmd}
+        Write-Host ''
+        Write-Host 'インストール完了。このウィンドウを閉じてアプリで再確認を押してください。'
+        Read-Host 'Press Enter to close'
+      `;
 
-        proc.stderr?.on('data', (data) => {
-          webContents.send('install:progress', { provider: 'system', message: data.toString() });
-        });
+      const proc = spawn('powershell', [
+        '-Command',
+        `Start-Process powershell -Verb RunAs -ArgumentList '-NoExit', '-Command', '${psScript.replace(/'/g, "''").replace(/\n/g, '; ')}'`
+      ], { shell: true });
 
-        proc.on('close', (code) => {
-          if (code === 0) {
-            resolve({ success: true, message: 'Node.js のインストールが完了しました。ターミナルを再起動してください。' });
-          } else {
-            resolve({ success: false, message: `インストールに失敗しました (exit code: ${code})` });
-          }
-        });
-
-        proc.on('error', (err) => {
-          resolve({ success: false, message: `エラー: ${err.message}` });
-        });
-      });
-    }
-
-    // Try Chocolatey
-    const choco = await checkCommand('choco', ['--version']);
-    if (choco.available) {
-      return new Promise((resolve) => {
-        webContents.send('install:progress', { provider: 'system', message: 'choco install nodejs を実行中...' });
-
-        const proc = spawn('choco', ['install', 'nodejs', '-y'], { shell: true });
-
-        proc.stdout?.on('data', (data) => {
-          webContents.send('install:progress', { provider: 'system', message: data.toString() });
-        });
-
-        proc.stderr?.on('data', (data) => {
-          webContents.send('install:progress', { provider: 'system', message: data.toString() });
-        });
-
-        proc.on('close', (code) => {
-          if (code === 0) {
-            resolve({ success: true, message: 'Node.js のインストールが完了しました。ターミナルを再起動してください。' });
-          } else {
-            resolve({ success: false, message: `インストールに失敗しました (exit code: ${code})` });
-          }
-        });
-
-        proc.on('error', (err) => {
-          resolve({ success: false, message: `エラー: ${err.message}` });
+      proc.on('close', () => {
+        resolve({
+          success: false,
+          message: 'PowerShell が開きました。インストール完了後「再確認」を押してください。',
+          needsManualInstall: true
         });
       });
-    }
 
-    // No package manager available - open download page
-    shell.openExternal('https://nodejs.org/ja/download/');
-    return { success: false, message: 'winget/chocolatey が見つかりません。nodejs.org からダウンロードしてください', needsManualInstall: true };
+      proc.on('error', () => {
+        shell.openExternal('https://nodejs.org/ja/download/');
+        resolve({ success: false, message: 'PowerShell を開けませんでした。nodejs.org からダウンロードしてください', needsManualInstall: true });
+      });
+    });
 
   } else {
-    // Linux: Use pkexec for GUI password prompt (works on Ubuntu with PolicyKit)
+    // Linux: Open terminal for interactive installation
     return new Promise((resolve) => {
-      webContents.send('install:progress', { provider: 'system', message: 'Node.js をインストール中... (パスワードを入力してください)' });
+      webContents.send('install:progress', { provider: 'system', message: 'ターミナルで Node.js をインストールします...' });
 
-      // Try pkexec first for GUI password dialog
-      const proc = spawn('pkexec', ['apt-get', 'install', '-y', 'nodejs', 'npm'], {
-        shell: false,
-        env: { ...process.env },
-      });
+      // Try gnome-terminal first (Ubuntu default), then other terminals
+      const installCmd = 'sudo apt-get update && sudo apt-get install -y nodejs npm; echo ""; echo "インストール完了。このウィンドウを閉じてアプリで再確認を押してください。"; read -p ""';
 
-      proc.stdout?.on('data', (data) => {
-        webContents.send('install:progress', { provider: 'system', message: data.toString() });
-      });
+      // Try different terminal emulators
+      const terminals = [
+        { cmd: 'gnome-terminal', args: ['--', 'bash', '-c', installCmd] },
+        { cmd: 'konsole', args: ['-e', 'bash', '-c', installCmd] },
+        { cmd: 'xfce4-terminal', args: ['-e', `bash -c '${installCmd}'`] },
+        { cmd: 'x-terminal-emulator', args: ['-e', `bash -c '${installCmd}'`] },
+      ];
 
-      proc.stderr?.on('data', (data) => {
-        webContents.send('install:progress', { provider: 'system', message: data.toString() });
-      });
-
-      proc.on('close', (code) => {
-        if (code === 0) {
-          resolve({ success: true, message: 'Node.js のインストールが完了しました' });
-        } else if (code === 126) {
-          // User cancelled authentication
-          resolve({ success: false, message: '認証がキャンセルされました' });
-        } else {
-          resolve({ success: false, message: `インストールに失敗しました (exit code: ${code})` });
-        }
-      });
-
-      proc.on('error', async () => {
-        // pkexec not available, try with gnome-terminal or xterm
-        webContents.send('install:progress', { provider: 'system', message: 'ターミナルでインストールを実行中...' });
-
-        // Try to open a terminal with the install command
-        const termProc = spawn('x-terminal-emulator', ['-e', 'sudo apt-get install -y nodejs npm; read -p "Press Enter to close..."'], {
-          shell: true,
-          detached: true,
-        });
-
-        termProc.on('error', () => {
+      const tryTerminal = (index: number) => {
+        if (index >= terminals.length) {
           shell.openExternal('https://nodejs.org/ja/download/');
           resolve({ success: false, message: 'ターミナルを開けませんでした。https://nodejs.org/ から手動でインストールしてください', needsManualInstall: true });
+          return;
+        }
+
+        const term = terminals[index];
+        const proc = spawn(term.cmd, term.args, { detached: true, stdio: 'ignore' });
+
+        proc.on('error', () => {
+          tryTerminal(index + 1);
         });
 
-        termProc.on('close', (termCode) => {
-          if (termCode === 0) {
-            resolve({ success: true, message: 'インストールが完了した可能性があります。再確認してください。' });
-          } else {
-            resolve({ success: false, message: 'ターミナルでの実行が完了しました。再確認してください。' });
-          }
+        proc.on('spawn', () => {
+          proc.unref();
+          resolve({
+            success: false,
+            message: 'ターミナルが開きました。インストール完了後「再確認」を押してください。',
+            needsManualInstall: true
+          });
         });
+      };
 
-        termProc.unref();
-      });
+      tryTerminal(0);
     });
   }
 });
