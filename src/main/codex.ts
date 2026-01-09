@@ -272,10 +272,23 @@ class CodexManager {
     return new Promise((resolve) => {
       onProgress('npm install -g @openai/codex を実行中...');
 
-      const proc = spawn('npm', ['install', '-g', '@openai/codex'], {
-        shell: true,
-        env: { ...process.env },
-      });
+      // Use login shell on macOS/Linux to get proper PATH
+      const platform = process.platform;
+      let proc;
+      if (platform === 'darwin') {
+        proc = spawn('/bin/zsh', ['-l', '-c', 'npm install -g @openai/codex'], {
+          env: { ...process.env },
+        });
+      } else if (platform === 'win32') {
+        proc = spawn('npm', ['install', '-g', '@openai/codex'], {
+          shell: true,
+          env: { ...process.env },
+        });
+      } else {
+        proc = spawn('/bin/bash', ['-l', '-c', 'npm install -g @openai/codex'], {
+          env: { ...process.env },
+        });
+      }
 
       let output = '';
       let errorOutput = '';

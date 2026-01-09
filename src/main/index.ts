@@ -98,11 +98,35 @@ ipcMain.handle('config:generateMasterKey', () => configManager.generateMasterKey
 
 // System check (npm availability)
 async function checkCommand(cmd: string, args: string[]): Promise<{ available: boolean; version: string | null }> {
+  // On macOS, GUI apps don't inherit shell PATH, so we need to use a login shell
+  const platform = process.platform;
+  let shellCmd: string;
+  let shellArgs: string[];
+
+  if (platform === 'darwin') {
+    // Use login shell to get proper PATH on macOS
+    const command = `${cmd} ${args.join(' ')}`;
+    shellCmd = '/bin/zsh';
+    shellArgs = ['-l', '-c', command];
+  } else if (platform === 'win32') {
+    shellCmd = cmd;
+    shellArgs = args;
+  } else {
+    // Linux
+    const command = `${cmd} ${args.join(' ')}`;
+    shellCmd = '/bin/bash';
+    shellArgs = ['-l', '-c', command];
+  }
+
   try {
     const result = await new Promise<string>((resolve, reject) => {
-      const proc = spawn(cmd, args, { shell: true });
+      const proc = spawn(shellCmd, shellArgs, {
+        shell: platform === 'win32',
+        env: { ...process.env },
+      });
       let output = '';
       proc.stdout?.on('data', (data) => { output += data.toString(); });
+      proc.stderr?.on('data', (data) => { /* ignore stderr */ });
       proc.on('close', (code) => {
         if (code === 0) resolve(output.trim());
         else reject(new Error(`${cmd} not found`));
