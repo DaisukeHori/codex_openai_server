@@ -9,7 +9,7 @@ let tray: Tray | null = null;
 export function createTray(mainWindow: BrowserWindow, onQuit: () => void): Tray {
   // Create tray icon
   const iconPath = path.join(__dirname, '..', '..', 'assets', 'icon.png');
-  let icon: nativeImage;
+  let icon: Electron.NativeImage;
   
   try {
     icon = nativeImage.createFromPath(iconPath);
