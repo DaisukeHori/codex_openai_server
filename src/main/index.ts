@@ -189,53 +189,34 @@ ipcMain.handle('system:installNode', async (event) => {
         });
       });
     } else {
-      // Homebrew not available - install Homebrew first
+      // Homebrew not available - open Terminal to install interactively
       return new Promise((resolve) => {
-        webContents.send('install:progress', { provider: 'system', message: 'Homebrew をインストール中...' });
+        webContents.send('install:progress', { provider: 'system', message: 'ターミナルで Homebrew をインストールします...' });
 
-        const installScript = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
-        const proc = spawn('/bin/bash', ['-c', `echo | ${installScript}`], {
-          shell: true,
-          env: { ...process.env, NONINTERACTIVE: '1' }
+        // Use osascript to open Terminal and run the install command
+        const installCmd = `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && eval "$(/opt/homebrew/bin/brew shellenv)" && brew install node; echo ''; echo 'インストール完了。このウィンドウを閉じてアプリで再確認を押してください。'; read -p ''`;
+        const appleScript = `tell application "Terminal"
+          activate
+          do script "${installCmd.replace(/"/g, '\\"')}"
+        end tell`;
+
+        const proc = spawn('osascript', ['-e', appleScript], {
+          shell: false,
         });
 
-        proc.stdout?.on('data', (data) => {
-          webContents.send('install:progress', { provider: 'system', message: data.toString() });
-        });
-
-        proc.stderr?.on('data', (data) => {
-          webContents.send('install:progress', { provider: 'system', message: data.toString() });
-        });
-
-        proc.on('close', async (code) => {
-          if (code === 0) {
-            // Now install Node.js
-            webContents.send('install:progress', { provider: 'system', message: 'Homebrew インストール完了。Node.js をインストール中...' });
-
-            const nodeProc = spawn('brew', ['install', 'node'], { shell: true });
-
-            nodeProc.stdout?.on('data', (data) => {
-              webContents.send('install:progress', { provider: 'system', message: data.toString() });
-            });
-
-            nodeProc.stderr?.on('data', (data) => {
-              webContents.send('install:progress', { provider: 'system', message: data.toString() });
-            });
-
-            nodeProc.on('close', (nodeCode) => {
-              if (nodeCode === 0) {
-                resolve({ success: true, message: 'Node.js のインストールが完了しました' });
-              } else {
-                resolve({ success: false, message: 'Node.js のインストールに失敗しました' });
-              }
-            });
-          } else {
-            resolve({ success: false, message: 'Homebrew のインストールに失敗しました。手動でインストールしてください。' });
-          }
+        proc.on('close', () => {
+          // Terminal opened, but we can't know when installation is done
+          resolve({
+            success: false,
+            message: 'ターミナルが開きました。インストール完了後「再確認」を押してください。',
+            needsManualInstall: true
+          });
         });
 
         proc.on('error', (err) => {
-          resolve({ success: false, message: `エラー: ${err.message}` });
+          // Fallback: open the Homebrew website
+          shell.openExternal('https://brew.sh/');
+          resolve({ success: false, message: `ターミナルを開けませんでした。https://brew.sh/ から手動でインストールしてください`, needsManualInstall: true });
         });
       });
     }
