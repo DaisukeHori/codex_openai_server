@@ -6,7 +6,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getConfig: () => ipcRenderer.invoke('config:get'),
   setConfig: (key: string, value: any) => ipcRenderer.invoke('config:set', key, value),
   generateMasterKey: () => ipcRenderer.invoke('config:generateMasterKey'),
-  
+
+  // System
+  checkSystem: () => ipcRenderer.invoke('system:check'),
+  installNode: () => ipcRenderer.invoke('system:installNode'),
+
   // Codex
   getCodexStatus: () => ipcRenderer.invoke('codex:status'),
   runCodexAuth: () => ipcRenderer.invoke('codex:auth'),
@@ -54,6 +58,8 @@ declare global {
       getConfig: () => Promise<any>;
       setConfig: (key: string, value: any) => Promise<void>;
       generateMasterKey: () => Promise<string>;
+      checkSystem: () => Promise<{ platform: string; npmAvailable: boolean; npmVersion: string | null; brewAvailable: boolean }>;
+      installNode: () => Promise<{ success: boolean; message: string; needsManualInstall?: boolean }>;
       getCodexStatus: () => Promise<any>;
       runCodexAuth: () => Promise<any>;
       installCodex: () => Promise<{ success: boolean; message: string }>;
