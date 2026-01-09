@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'path';
+import { spawn } from 'child_process';
 import { configManager } from './config';
 import { codexManager } from './codex';
 import { claudeManager } from './claude';
@@ -94,6 +95,252 @@ ipcMain.handle('config:set', (_, key: string, value: any) => {
   configManager.set(key as any, value);
 });
 ipcMain.handle('config:generateMasterKey', () => configManager.generateMasterKey());
+
+// System check (npm availability)
+async function checkCommand(cmd: string, args: string[]): Promise<{ available: boolean; version: string | null }> {
+  try {
+    const result = await new Promise<string>((resolve, reject) => {
+      const proc = spawn(cmd, args, { shell: true });
+      let output = '';
+      proc.stdout?.on('data', (data) => { output += data.toString(); });
+      proc.on('close', (code) => {
+        if (code === 0) resolve(output.trim());
+        else reject(new Error(`${cmd} not found`));
+      });
+      proc.on('error', reject);
+    });
+    return { available: true, version: result };
+  } catch {
+    return { available: false, version: null };
+  }
+}
+
+ipcMain.handle('system:check', async () => {
+  const platform = process.platform;
+  const npm = await checkCommand('npm', ['--version']);
+  const brew = platform === 'darwin' ? await checkCommand('brew', ['--version']) : { available: false, version: null };
+
+  return {
+    platform,
+    npmAvailable: npm.available,
+    npmVersion: npm.version,
+    brewAvailable: brew.available,
+  };
+});
+
+// Install Node.js/npm
+ipcMain.handle('system:installNode', async (event) => {
+  const platform = process.platform;
+  const webContents = event.sender;
+
+  if (platform === 'darwin') {
+    // macOS: Try Homebrew first
+    const brew = await checkCommand('brew', ['--version']);
+
+    if (brew.available) {
+      // Install Node.js via Homebrew
+      return new Promise((resolve) => {
+        webContents.send('install:progress', { provider: 'system', message: 'brew install node を実行中...' });
+
+        const proc = spawn('brew', ['install', 'node'], { shell: true });
+
+        proc.stdout?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.stderr?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.on('close', (code) => {
+          if (code === 0) {
+            resolve({ success: true, message: 'Node.js のインストールが完了しました' });
+          } else {
+            resolve({ success: false, message: `インストールに失敗しました (exit code: ${code})` });
+          }
+        });
+
+        proc.on('error', (err) => {
+          resolve({ success: false, message: `エラー: ${err.message}` });
+        });
+      });
+    } else {
+      // Homebrew not available - install Homebrew first
+      return new Promise((resolve) => {
+        webContents.send('install:progress', { provider: 'system', message: 'Homebrew をインストール中...' });
+
+        const installScript = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
+        const proc = spawn('/bin/bash', ['-c', `echo | ${installScript}`], {
+          shell: true,
+          env: { ...process.env, NONINTERACTIVE: '1' }
+        });
+
+        proc.stdout?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.stderr?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.on('close', async (code) => {
+          if (code === 0) {
+            // Now install Node.js
+            webContents.send('install:progress', { provider: 'system', message: 'Homebrew インストール完了。Node.js をインストール中...' });
+
+            const nodeProc = spawn('brew', ['install', 'node'], { shell: true });
+
+            nodeProc.stdout?.on('data', (data) => {
+              webContents.send('install:progress', { provider: 'system', message: data.toString() });
+            });
+
+            nodeProc.stderr?.on('data', (data) => {
+              webContents.send('install:progress', { provider: 'system', message: data.toString() });
+            });
+
+            nodeProc.on('close', (nodeCode) => {
+              if (nodeCode === 0) {
+                resolve({ success: true, message: 'Node.js のインストールが完了しました' });
+              } else {
+                resolve({ success: false, message: 'Node.js のインストールに失敗しました' });
+              }
+            });
+          } else {
+            resolve({ success: false, message: 'Homebrew のインストールに失敗しました。手動でインストールしてください。' });
+          }
+        });
+
+        proc.on('error', (err) => {
+          resolve({ success: false, message: `エラー: ${err.message}` });
+        });
+      });
+    }
+  } else if (platform === 'win32') {
+    // Windows: Try winget first, then chocolatey, then open download page
+    const winget = await checkCommand('winget', ['--version']);
+
+    if (winget.available) {
+      return new Promise((resolve) => {
+        webContents.send('install:progress', { provider: 'system', message: 'winget install OpenJS.NodeJS を実行中...' });
+
+        const proc = spawn('winget', ['install', 'OpenJS.NodeJS', '--accept-package-agreements', '--accept-source-agreements'], {
+          shell: true,
+        });
+
+        proc.stdout?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.stderr?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.on('close', (code) => {
+          if (code === 0) {
+            resolve({ success: true, message: 'Node.js のインストールが完了しました。ターミナルを再起動してください。' });
+          } else {
+            resolve({ success: false, message: `インストールに失敗しました (exit code: ${code})` });
+          }
+        });
+
+        proc.on('error', (err) => {
+          resolve({ success: false, message: `エラー: ${err.message}` });
+        });
+      });
+    }
+
+    // Try Chocolatey
+    const choco = await checkCommand('choco', ['--version']);
+    if (choco.available) {
+      return new Promise((resolve) => {
+        webContents.send('install:progress', { provider: 'system', message: 'choco install nodejs を実行中...' });
+
+        const proc = spawn('choco', ['install', 'nodejs', '-y'], { shell: true });
+
+        proc.stdout?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.stderr?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.on('close', (code) => {
+          if (code === 0) {
+            resolve({ success: true, message: 'Node.js のインストールが完了しました。ターミナルを再起動してください。' });
+          } else {
+            resolve({ success: false, message: `インストールに失敗しました (exit code: ${code})` });
+          }
+        });
+
+        proc.on('error', (err) => {
+          resolve({ success: false, message: `エラー: ${err.message}` });
+        });
+      });
+    }
+
+    // No package manager available - open download page
+    shell.openExternal('https://nodejs.org/ja/download/');
+    return { success: false, message: 'winget/chocolatey が見つかりません。nodejs.org からダウンロードしてください', needsManualInstall: true };
+
+  } else {
+    // Linux: Use pkexec for GUI password prompt (works on Ubuntu with PolicyKit)
+    return new Promise((resolve) => {
+      webContents.send('install:progress', { provider: 'system', message: 'Node.js をインストール中... (パスワードを入力してください)' });
+
+      // Try pkexec first for GUI password dialog
+      const proc = spawn('pkexec', ['apt-get', 'install', '-y', 'nodejs', 'npm'], {
+        shell: false,
+        env: { ...process.env },
+      });
+
+      proc.stdout?.on('data', (data) => {
+        webContents.send('install:progress', { provider: 'system', message: data.toString() });
+      });
+
+      proc.stderr?.on('data', (data) => {
+        webContents.send('install:progress', { provider: 'system', message: data.toString() });
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve({ success: true, message: 'Node.js のインストールが完了しました' });
+        } else if (code === 126) {
+          // User cancelled authentication
+          resolve({ success: false, message: '認証がキャンセルされました' });
+        } else {
+          resolve({ success: false, message: `インストールに失敗しました (exit code: ${code})` });
+        }
+      });
+
+      proc.on('error', async () => {
+        // pkexec not available, try with gnome-terminal or xterm
+        webContents.send('install:progress', { provider: 'system', message: 'ターミナルでインストールを実行中...' });
+
+        // Try to open a terminal with the install command
+        const termProc = spawn('x-terminal-emulator', ['-e', 'sudo apt-get install -y nodejs npm; read -p "Press Enter to close..."'], {
+          shell: true,
+          detached: true,
+        });
+
+        termProc.on('error', () => {
+          shell.openExternal('https://nodejs.org/ja/download/');
+          resolve({ success: false, message: 'ターミナルを開けませんでした。https://nodejs.org/ から手動でインストールしてください', needsManualInstall: true });
+        });
+
+        termProc.on('close', (termCode) => {
+          if (termCode === 0) {
+            resolve({ success: true, message: 'インストールが完了した可能性があります。再確認してください。' });
+          } else {
+            resolve({ success: false, message: 'ターミナルでの実行が完了しました。再確認してください。' });
+          }
+        });
+
+        termProc.unref();
+      });
+    });
+  }
+});
 
 // Codex
 ipcMain.handle('codex:status', async () => {
