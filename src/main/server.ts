@@ -566,7 +566,30 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
         tunnel: tunnelManager.getStatus(),
       });
     });
-    
+
+    app.patch('/admin/config', authMiddleware, (req, res) => {
+      const { port, defaultModel } = req.body;
+      let requiresRestart = false;
+
+      if (port !== undefined) {
+        configManager.set('port', port);
+        requiresRestart = true;
+      }
+
+      if (defaultModel !== undefined) {
+        configManager.set('defaultModel', defaultModel);
+      }
+
+      res.json({
+        success: true,
+        requiresRestart,
+        config: {
+          port: configManager.get('port'),
+          defaultModel: configManager.get('defaultModel'),
+        },
+      });
+    });
+
     // ========================================
     // Serve Admin UI
     // ========================================

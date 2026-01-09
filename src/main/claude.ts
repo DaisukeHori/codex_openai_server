@@ -92,34 +92,46 @@ export class ClaudeManager {
 
   async checkAuth(): Promise<{ authenticated: boolean; method: 'api_key' | 'subscription' | null; message: string }> {
     try {
-      // Check ANTHROPIC_API_KEY environment variable
+      // Determine auth method first
+      let method: 'api_key' | 'subscription' | null = null;
+
       if (process.env.ANTHROPIC_API_KEY) {
-        return { authenticated: true, method: 'api_key', message: 'Authenticated via ANTHROPIC_API_KEY' };
-      }
-
-      // Check Claude settings directory
-      const claudeDir = path.join(os.homedir(), '.claude');
-      const settingsPath = path.join(claudeDir, 'settings.json');
-
-      if (fs.existsSync(settingsPath)) {
-        try {
-          const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-          // If settings exist, assume subscription auth (OAuth)
-          if (settings) {
-            return { authenticated: true, method: 'subscription', message: 'Authenticated via Claude subscription' };
-          }
-        } catch (e) {
-          // Settings parse error
+        method = 'api_key';
+      } else {
+        const claudeDir = path.join(os.homedir(), '.claude');
+        if (fs.existsSync(claudeDir)) {
+          method = 'subscription';
         }
       }
 
-      // Try running a simple command to check auth
-      const output = await this.runRawCommand(['--version']);
-      if (output) {
-        return { authenticated: true, method: 'subscription', message: 'Authenticated' };
-      }
+      // Actually test if Claude CLI works by running a minimal command
+      // Using --help is fast and doesn't require authentication
+      // But to truly test auth, we need to try a simple prompt
+      try {
+        // First check if CLI is available
+        await this.runRawCommand(['--version']);
 
-      return { authenticated: false, method: null, message: 'Not authenticated' };
+        // If ANTHROPIC_API_KEY is set, assume it's valid (actual test would be slow)
+        if (method === 'api_key') {
+          return { authenticated: true, method: 'api_key', message: 'Authenticated via ANTHROPIC_API_KEY' };
+        }
+
+        // For subscription, check if credentials exist
+        const claudeDir = path.join(os.homedir(), '.claude');
+        const credentialsExist = fs.existsSync(claudeDir) &&
+          (fs.existsSync(path.join(claudeDir, 'settings.json')) ||
+           fs.existsSync(path.join(claudeDir, 'credentials.json')));
+
+        if (credentialsExist) {
+          return { authenticated: true, method: 'subscription', message: 'Authenticated via Claude subscription' };
+        }
+
+        // CLI works but no clear auth method - might still work
+        return { authenticated: true, method: 'subscription', message: 'Claude CLI available' };
+      } catch (cmdError) {
+        // CLI command failed
+        return { authenticated: false, method: null, message: 'Claude CLI not working' };
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return { authenticated: false, method: null, message: msg };
