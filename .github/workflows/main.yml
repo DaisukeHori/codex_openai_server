@@ -11,8 +11,20 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Generate version
+        id: version
+        run: echo "version=1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+        shell: bash
+      
+      - name: Update package.json version
+        run: |
+          npm version 1.0.${{ github.run_number }} --no-git-tag-version
+        shell: bash
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,6 +37,11 @@ jobs:
       
       - name: Build TypeScript
         run: npm run build
+        shell: bash
+      
+      - name: Copy renderer files
+        run: |
+          cp -r src/renderer dist/
         shell: bash
       
       - name: Build Electron
@@ -45,6 +62,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Update package.json version
+        run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -55,6 +75,9 @@ jobs:
       
       - name: Build TypeScript
         run: npm run build
+      
+      - name: Copy renderer files
+        run: cp -r src/renderer dist/
       
       - name: Build Electron
         run: npm run dist:mac
@@ -74,6 +97,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Update package.json version
+        run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -84,6 +110,9 @@ jobs:
       
       - name: Build TypeScript
         run: npm run build
+      
+      - name: Copy renderer files
+        run: cp -r src/renderer dist/
       
       - name: Build Electron
         run: npm run dist:linux
@@ -122,7 +151,7 @@ jobs:
             artifacts/macos-build/*
             artifacts/linux-build/*
           body: |
-            ## Codex API Server
+            ## Codex API Server v1.0.${{ github.run_number }}
             
             OpenAI API互換サーバーのデスクトップアプリ
             
