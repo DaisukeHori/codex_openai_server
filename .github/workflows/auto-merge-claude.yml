@@ -15,19 +15,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Merge to main
-        run: |
-          git checkout main
-          git pull origin main
-          git merge origin/${{ github.ref_name }} --no-edit -m "Auto-merge ${{ github.ref_name }} into main"
-          git push origin main
+      - name: Create and merge PR
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Check if PR already exists
+          EXISTING_PR=$(gh pr list --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number' || echo "")
+
+          if [ -z "$EXISTING_PR" ]; then
+            # Create new PR
+            PR_URL=$(gh pr create \
+              --title "Auto-merge: ${{ github.ref_name }}" \
+              --body "Automatic PR from Claude Code branch" \
+              --head "${{ github.ref_name }}" \
+              --base main)
+            echo "Created PR: $PR_URL"
+
+            # Get PR number
+            PR_NUMBER=$(gh pr list --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number')
+          else
+            PR_NUMBER=$EXISTING_PR
+            echo "Using existing PR #$PR_NUMBER"
+          fi
+
+          # Merge the PR
+          gh pr merge $PR_NUMBER --merge --auto --delete-branch || gh pr merge $PR_NUMBER --merge --delete-branch
