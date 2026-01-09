@@ -216,15 +216,83 @@ ipcMain.handle('system:installNode', async (event) => {
       });
     }
   } else if (platform === 'win32') {
-    // Windows: Guide to download installer
-    shell.openExternal('https://nodejs.org/ja/download/');
-    return { success: false, message: 'Windowsでは nodejs.org からインストーラーをダウンロードしてください', needsManualInstall: true };
-  } else {
-    // Linux: Try apt or guide to nvm
-    return new Promise((resolve) => {
-      webContents.send('install:progress', { provider: 'system', message: 'apt を使用して Node.js をインストール中...' });
+    // Windows: Try winget first, then chocolatey, then open download page
+    const winget = await checkCommand('winget', ['--version']);
 
-      const proc = spawn('sudo', ['apt', 'install', '-y', 'nodejs', 'npm'], { shell: true });
+    if (winget.available) {
+      return new Promise((resolve) => {
+        webContents.send('install:progress', { provider: 'system', message: 'winget install OpenJS.NodeJS を実行中...' });
+
+        const proc = spawn('winget', ['install', 'OpenJS.NodeJS', '--accept-package-agreements', '--accept-source-agreements'], {
+          shell: true,
+        });
+
+        proc.stdout?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.stderr?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.on('close', (code) => {
+          if (code === 0) {
+            resolve({ success: true, message: 'Node.js のインストールが完了しました。ターミナルを再起動してください。' });
+          } else {
+            resolve({ success: false, message: `インストールに失敗しました (exit code: ${code})` });
+          }
+        });
+
+        proc.on('error', (err) => {
+          resolve({ success: false, message: `エラー: ${err.message}` });
+        });
+      });
+    }
+
+    // Try Chocolatey
+    const choco = await checkCommand('choco', ['--version']);
+    if (choco.available) {
+      return new Promise((resolve) => {
+        webContents.send('install:progress', { provider: 'system', message: 'choco install nodejs を実行中...' });
+
+        const proc = spawn('choco', ['install', 'nodejs', '-y'], { shell: true });
+
+        proc.stdout?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.stderr?.on('data', (data) => {
+          webContents.send('install:progress', { provider: 'system', message: data.toString() });
+        });
+
+        proc.on('close', (code) => {
+          if (code === 0) {
+            resolve({ success: true, message: 'Node.js のインストールが完了しました。ターミナルを再起動してください。' });
+          } else {
+            resolve({ success: false, message: `インストールに失敗しました (exit code: ${code})` });
+          }
+        });
+
+        proc.on('error', (err) => {
+          resolve({ success: false, message: `エラー: ${err.message}` });
+        });
+      });
+    }
+
+    // No package manager available - open download page
+    shell.openExternal('https://nodejs.org/ja/download/');
+    return { success: false, message: 'winget/chocolatey が見つかりません。nodejs.org からダウンロードしてください', needsManualInstall: true };
+
+  } else {
+    // Linux: Use pkexec for GUI password prompt (works on Ubuntu with PolicyKit)
+    return new Promise((resolve) => {
+      webContents.send('install:progress', { provider: 'system', message: 'Node.js をインストール中... (パスワードを入力してください)' });
+
+      // Try pkexec first for GUI password dialog
+      const proc = spawn('pkexec', ['apt-get', 'install', '-y', 'nodejs', 'npm'], {
+        shell: false,
+        env: { ...process.env },
+      });
 
       proc.stdout?.on('data', (data) => {
         webContents.send('install:progress', { provider: 'system', message: data.toString() });
@@ -237,13 +305,38 @@ ipcMain.handle('system:installNode', async (event) => {
       proc.on('close', (code) => {
         if (code === 0) {
           resolve({ success: true, message: 'Node.js のインストールが完了しました' });
+        } else if (code === 126) {
+          // User cancelled authentication
+          resolve({ success: false, message: '認証がキャンセルされました' });
         } else {
-          resolve({ success: false, message: 'インストールに失敗しました。手動でインストールしてください: https://nodejs.org/' });
+          resolve({ success: false, message: `インストールに失敗しました (exit code: ${code})` });
         }
       });
 
-      proc.on('error', () => {
-        resolve({ success: false, message: 'apt が見つかりません。https://nodejs.org/ から手動でインストールしてください' });
+      proc.on('error', async () => {
+        // pkexec not available, try with gnome-terminal or xterm
+        webContents.send('install:progress', { provider: 'system', message: 'ターミナルでインストールを実行中...' });
+
+        // Try to open a terminal with the install command
+        const termProc = spawn('x-terminal-emulator', ['-e', 'sudo apt-get install -y nodejs npm; read -p "Press Enter to close..."'], {
+          shell: true,
+          detached: true,
+        });
+
+        termProc.on('error', () => {
+          shell.openExternal('https://nodejs.org/ja/download/');
+          resolve({ success: false, message: 'ターミナルを開けませんでした。https://nodejs.org/ から手動でインストールしてください', needsManualInstall: true });
+        });
+
+        termProc.on('close', (termCode) => {
+          if (termCode === 0) {
+            resolve({ success: true, message: 'インストールが完了した可能性があります。再確認してください。' });
+          } else {
+            resolve({ success: false, message: 'ターミナルでの実行が完了しました。再確認してください。' });
+          }
+        });
+
+        termProc.unref();
       });
     });
   }
