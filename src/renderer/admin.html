@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' http://localhost:*;">
+  <title>Codex API Server - 管理コンソール</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    code, .mono { font-family: 'JetBrains Mono', monospace; }
+    
+    /* Light theme */
+    :root {
+      --bg-primary: #f9fafb;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f3f4f6;
+      --text-primary: #111827;
+      --text-secondary: #4b5563;
+      --text-muted: #9ca3af;
+      --border: #e5e7eb;
+      --sidebar-bg: linear-gradient(180deg, #111827 0%, #1f2937 100%);
+      --card-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    /* Dark theme */
+    .dark {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --text-primary: #f1f5f9;
+      --text-secondary: #cbd5e1;
+      --text-muted: #64748b;
+      --border: #334155;
+      --sidebar-bg: linear-gradient(180deg, #020617 0%, #0f172a 100%);
+      --card-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    body { background: var(--bg-primary); color: var(--text-primary); transition: background 0.3s, color 0.3s; }
+    .card { background: var(--bg-secondary); border-radius: 16px; box-shadow: var(--card-shadow); border: 1px solid var(--border); }
+    .sidebar { background: var(--sidebar-bg); }
+    .input-field { background: var(--bg-secondary); border: 2px solid var(--border); color: var(--text-primary); }
+    .input-field:focus { border-color: #6366f1; }
+    
+    .gradient-primary { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
+    .gradient-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+    .gradient-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .gradient-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+    
+    .sidebar-item { transition: all 0.2s; border-radius: 10px; margin: 4px 8px; }
+    .sidebar-item:hover { background: rgba(255,255,255,0.1); }
+    .sidebar-item.active { background: rgba(99, 102, 241, 0.3); color: white; }
+    
+    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    .animate-slide-up { animation: slideUp 0.3s ease-out; }
+    .animate-pulse-slow { animation: pulse 2s infinite; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    
+    .key-blur { filter: blur(4px); transition: filter 0.2s; }
+    .key-blur:hover { filter: blur(0); }
+    
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .status-online { background: #10b981; box-shadow: 0 0 10px #10b981; }
+    .status-offline { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
+    
+    .btn-primary { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 10px 20px; border-radius: 10px; font-weight: 500; transition: all 0.2s; border: none; cursor: pointer; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4); }
+    .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); padding: 10px 20px; border-radius: 10px; font-weight: 500; border: none; cursor: pointer; }
+    .btn-secondary:hover { opacity: 0.8; }
+    .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; }
+    .btn-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
+    
+    .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .badge-success { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .badge-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .badge-info { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+    .badge-purple { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+    
+    .table-row { transition: background 0.15s; }
+    .table-row:hover { background: var(--bg-tertiary); }
+    
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: var(--bg-tertiary); border-radius: 3px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
+    
+    .checkbox-row { transition: all 0.2s; }
+    .checkbox-row:hover { background: var(--bg-tertiary); }
+    .checkbox-row.selected { background: rgba(99, 102, 241, 0.1); }
+    
+    .log-line { font-size: 12px; padding: 4px 8px; border-radius: 4px; margin: 2px 0; }
+    .log-info { background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; }
+    .log-success { background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10b981; }
+    .log-warning { background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; }
+    .log-error { background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; }
+    
+    .notification-badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; background: #ef4444; color: white; font-size: 10px; font-weight: 600; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+    
+    /* Mobile sidebar */
+    @media (max-width: 768px) {
+      .sidebar-mobile-hidden { transform: translateX(-100%); }
+      .sidebar-mobile-visible { transform: translateX(0); }
+    }
+    
+    .toggle-switch { position: relative; width: 48px; height: 24px; background: var(--bg-tertiary); border-radius: 12px; cursor: pointer; transition: background 0.3s; }
+    .toggle-switch.active { background: #6366f1; }
+    .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: transform 0.3s; }
+    .toggle-switch.active::after { transform: translateX(24px); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext } = React;
+
+    // ============================================
+    // Context & Theme
+    // ============================================
+    const ThemeContext = createContext();
+    const useTheme = () => useContext(ThemeContext);
+
+    const ThemeProvider = ({ children }) => {
+      const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
+      useEffect(() => {
+        document.documentElement.classList.toggle('dark', dark);
+        localStorage.setItem('theme', dark ? 'dark' : 'light');
+      }, [dark]);
+      return <ThemeContext.Provider value={{ dark, setDark, toggle: () => setDark(d => !d) }}>{children}</ThemeContext.Provider>;
+    };
+
+    // ============================================
+    // Icons
+    // ============================================
+    const Icons = {
+      Dashboard: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>,
+      Key: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
+      History: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      Terminal: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+      Settings: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+      Chart: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
+      Log: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+      Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
+      Search: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
+      Refresh: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
+      Copy: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+      Check: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
+      X: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+      Eye: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>,
+      Trash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+      Ban: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>,
+      Activity: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>,
+      Server: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>,
+      Logout: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
+      Moon: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>,
+      Sun: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+      Menu: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>,
+      Download: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
+      Play: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      Bell: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
+      CheckSquare: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+    };
+
+    // ============================================
+    // API Client
+    // ============================================
+    const createApi = (baseUrl, masterKey) => {
+      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${masterKey}` };
+      const handle = async (res) => { if (!res.ok) throw new Error(await res.text()); return res.json(); };
+      return {
+        health: () => fetch(`${baseUrl}/health`).then(handle),
+        processStatus: () => fetch(`${baseUrl}/status/processes`, { headers }).then(handle),
+        listKeys: (inactive = false) => fetch(`${baseUrl}/v1/api-keys?include_inactive=${inactive}`, { headers }).then(handle),
+        getKey: (id) => fetch(`${baseUrl}/v1/api-keys/${id}`, { headers }).then(handle),
+        createKey: (data) => fetch(`${baseUrl}/v1/api-keys`, { method: 'POST', headers, body: JSON.stringify(data) }).then(handle),
+        updateKey: (id, data) => fetch(`${baseUrl}/v1/api-keys/${id}`, { method: 'PATCH', headers, body: JSON.stringify(data) }).then(handle),
+        revokeKey: (id) => fetch(`${baseUrl}/v1/api-keys/${id}/revoke`, { method: 'POST', headers }).then(handle),
+        deleteKey: (id) => fetch(`${baseUrl}/v1/api-keys/${id}`, { method: 'DELETE', headers }).then(handle),
+        getUsage: (id, start, end) => {
+          let url = `${baseUrl}/v1/api-keys/${id}/usage`;
+          const p = new URLSearchParams();
+          if (start) p.append('start_date', start);
+          if (end) p.append('end_date', end);
+          if (p.toString()) url += `?${p}`;
+          return fetch(url, { headers }).then(handle);
+        },
+        getStats: () => fetch(`${baseUrl}/v1/api-keys-stats`, { headers }).then(handle),
+        listResponses: (limit = 50) => fetch(`${baseUrl}/v1/responses?limit=${limit}`, { headers }).then(handle),
+        getResponse: (id) => fetch(`${baseUrl}/v1/responses/${id}`, { headers }).then(handle),
+        deleteResponse: (id) => fetch(`${baseUrl}/v1/responses/${id}`, { method: 'DELETE', headers }).then(handle),
+        createResponse: (data) => fetch(`${baseUrl}/v1/responses`, { method: 'POST', headers, body: JSON.stringify(data) }).then(handle),
+        chatCompletion: (data) => fetch(`${baseUrl}/v1/chat/completions`, { method: 'POST', headers, body: JSON.stringify(data) }).then(handle),
+        // Tunnel API
+        tunnelStatus: () => fetch(`${baseUrl}/admin/tunnel/status`, { headers }).then(handle),
+        tunnelStart: () => fetch(`${baseUrl}/admin/tunnel/start`, { method: 'POST', headers }).then(handle),
+        tunnelStop: () => fetch(`${baseUrl}/admin/tunnel/stop`, { method: 'POST', headers }).then(handle),
+        // Config API
+        getConfig: () => fetch(`${baseUrl}/admin/config`, { headers }).then(handle),
+        updateConfig: (data) => fetch(`${baseUrl}/admin/config`, { method: 'PATCH', headers, body: JSON.stringify(data) }).then(handle),
+      };
+    };
+
+    // ============================================
+    // Utils
+    // ============================================
+    const formatDate = (ts) => ts ? new Date(ts * 1000).toLocaleString('ja-JP') : '-';
+    const formatDateShort = (ts) => ts ? new Date(ts * 1000).toLocaleDateString('ja-JP') : '-';
+    const formatNum = (n) => n?.toLocaleString() || '0';
+    const timeAgo = (ts) => {
+      if (!ts) return '-';
+      const s = Math.floor(Date.now() / 1000 - ts);
+      if (s < 60) return `${s}秒前`;
+      if (s < 3600) return `${Math.floor(s / 60)}分前`;
+      if (s < 86400) return `${Math.floor(s / 3600)}時間前`;
+      return `${Math.floor(s / 86400)}日前`;
+    };
+    const downloadFile = (content, filename, type = 'text/plain') => {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    // ============================================
+    // Base Components
+    // ============================================
+    const Toast = ({ message, type, onClose }) => {
+      useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, [onClose]);
+      const colors = { success: 'bg-green-500', error: 'bg-red-500', warning: 'bg-yellow-500', info: 'bg-blue-500' };
+      return (
+        <div className={`fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-xl shadow-lg animate-slide-up z-50 flex items-center gap-3`}>
+          <span>{message}</span>
+          <button onClick={onClose} className="hover:opacity-80"><Icons.X /></button>
+        </div>
+      );
+    };
+
+    const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
+      if (!isOpen) return null;
+      const sizes = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl', full: 'max-w-6xl' };
+      return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4" onClick={onClose}>
+          <div className={`card w-full ${sizes[size]} animate-slide-up max-h-[90vh] flex flex-col`} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center px-6 py-4 border-b border-[var(--border)]">
+              <h3 className="text-lg font-semibold">{title}</h3>
+              <button onClick={onClose} className="p-1 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)]"><Icons.X /></button>
+            </div>
+            <div className="p-6 overflow-y-auto scrollbar-thin">{children}</div>
+          </div>
+        </div>
+      );
+    };
+
+    const Spinner = ({ size = 'md' }) => {
+      const s = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12' };
+      return <div className={`${s[size]} border-2 border-[var(--border)] border-t-indigo-500 rounded-full animate-spin`} />;
+    };
+
+    const StatCard = ({ icon, label, value, sub, color = 'indigo', trend }) => {
+      const colors = { indigo: 'from-indigo-500 to-purple-500', green: 'from-green-500 to-emerald-500', orange: 'from-orange-500 to-amber-500', blue: 'from-blue-500 to-cyan-500', pink: 'from-pink-500 to-rose-500' };
+      return (
+        <div className="card p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[var(--text-muted)] text-sm font-medium">{label}</p>
+              <p className="text-3xl font-bold mt-2">{value}</p>
+              {sub && <p className="text-[var(--text-muted)] text-sm mt-1">{sub}</p>}
+              {trend !== undefined && (
+                <p className={`text-sm mt-2 ${trend >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}% vs 昨日
+                </p>
+              )}
+            </div>
+            <div className={`w-14 h-14 bg-gradient-to-br ${colors[color]} rounded-2xl flex items-center justify-center text-white shadow-lg`}>{icon}</div>
+          </div>
+        </div>
+      );
+    };
+
+    const ScopeBadge = ({ scope }) => {
+      const s = { responses: 'badge-info', chat: 'badge-success', admin: 'badge-purple' };
+      return <span className={`badge ${s[scope] || 'badge-info'}`}>{scope}</span>;
+    };
+
+    const StatusBadge = ({ isActive, expiresAt }) => {
+      const now = Math.floor(Date.now() / 1000);
+      if (!isActive) return <span className="badge badge-danger">無効</span>;
+      if (expiresAt && expiresAt < now) return <span className="badge badge-warning">期限切れ</span>;
+      return <span className="badge badge-success">有効</span>;
+    };
+
+    const Checkbox = ({ checked, onChange, label }) => (
+      <label className="flex items-center gap-2 cursor-pointer">
+        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-[var(--border)]'}`}>
+          {checked && <Icons.Check />}
+        </div>
+        {label && <span className="text-sm">{label}</span>}
+      </label>
+    );
+
+    // ============================================
+    // Chart Component
+    // ============================================
+    const UsageChart = ({ data, type = 'bar' }) => {
+      const canvasRef = useRef(null);
+      const chartRef = useRef(null);
+      const { dark } = useTheme();
+
+      useEffect(() => {
+        if (!canvasRef.current || !data?.length) return;
+
+        if (chartRef.current) chartRef.current.destroy();
+
+        const ctx = canvasRef.current.getContext('2d');
+        const textColor = dark ? '#94a3b8' : '#64748b';
+        const gridColor = dark ? '#334155' : '#e2e8f0';
+
+        chartRef.current = new Chart(ctx, {
+          type,
+          data: {
+            labels: data.map(d => d.date?.slice(5) || d.label),
+            datasets: [
+              {
+                label: 'リクエスト数',
+                data: data.map(d => d.request_count || d.value),
+                backgroundColor: 'rgba(99, 102, 241, 0.5)',
+                borderColor: 'rgb(99, 102, 241)',
+                borderWidth: 2,
+                borderRadius: 4,
+                tension: 0.3,
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+            },
+            scales: {
+              x: { ticks: { color: textColor }, grid: { color: gridColor } },
+              y: { ticks: { color: textColor }, grid: { color: gridColor }, beginAtZero: true },
+            },
+          },
+        });
+
+        return () => { if (chartRef.current) chartRef.current.destroy(); };
+      }, [data, type, dark]);
+
+      return <canvas ref={canvasRef} />;
+    };
+
+    // ============================================
+    // Dashboard Page
+    // ============================================
+    const DashboardPage = ({ api, showToast }) => {
+      const [health, setHealth] = useState(null);
+      const [stats, setStats] = useState(null);
+      const [processes, setProcesses] = useState(null);
+      const [responses, setResponses] = useState([]);
+      const [usageData, setUsageData] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      const load = useCallback(async () => {
+        try {
+          const [h, s, p, r] = await Promise.all([
+            api.health(), api.getStats().catch(() => null), api.processStatus().catch(() => null), api.listResponses(20).catch(() => ({ data: [] }))
+          ]);
+          setHealth(h); setStats(s); setProcesses(p); setResponses(r.data || []);
+          
+          // Generate mock usage data for last 7 days
+          const mockUsage = [];
+          for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            mockUsage.push({
+              date: d.toISOString().split('T')[0],
+              request_count: Math.floor(Math.random() * 100) + 20,
+            });
+          }
+          setUsageData(mockUsage);
+        } catch (e) { showToast('読み込み失敗', 'error'); }
+        finally { setLoading(false); }
+      }, [api]);
+
+      useEffect(() => { load(); const i = setInterval(load, 15000); return () => clearInterval(i); }, [load]);
+
+      if (loading) return <div className="flex items-center justify-center h-64"><Spinner size="lg" /></div>;
+
+      return (
+        <div className="space-y-6 animate-fade-in">
+          {/* Server Status */}
+          <div className="card p-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-4">
+                <span className={`status-dot ${health?.status === 'ok' ? 'status-online' : 'status-offline'} animate-pulse-slow`} />
+                <div>
+                  <h3 className="font-semibold">サーバー状態</h3>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {health?.codex?.authenticated ? '✓ Codex認証済み' : '✗ Codex未認証'} • 
+                    {health?.codex?.authMethod === 'chatgpt' ? ' ChatGPTアカウント' : ' APIキー'}
+                  </p>
+                </div>
+              </div>
+              <button onClick={load} className="btn-secondary flex items-center gap-2"><Icons.Refresh />更新</button>
+            </div>
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard icon={<Icons.Key />} label="APIキー数" value={formatNum(stats?.total_keys)} sub={`${stats?.active_keys || 0} 有効`} color="indigo" />
+            <StatCard icon={<Icons.Activity />} label="本日のリクエスト" value={formatNum(stats?.total_requests_today)} color="green" trend={12} />
+            <StatCard icon={<Icons.Server />} label="アクティブプロセス" value={formatNum(processes?.active)} sub={`${processes?.queued || 0} 待機中`} color="orange" />
+            <StatCard icon={<Icons.History />} label="総レスポンス数" value={formatNum(health?.storage?.totalResponses)} color="blue" />
+          </div>
+
+          {/* Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="card p-6">
+              <h3 className="font-semibold mb-4">週間リクエスト数</h3>
+              <div className="h-64">
+                <UsageChart data={usageData} type="bar" />
+              </div>
+            </div>
+            <div className="card p-6">
+              <h3 className="font-semibold mb-4">リクエスト推移</h3>
+              <div className="h-64">
+                <UsageChart data={usageData} type="line" />
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div className="card">
+            <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center">
+              <h3 className="font-semibold">最近のリクエスト</h3>
+              <span className="text-sm text-[var(--text-muted)]">{responses.length}件</span>
+            </div>
+            <div className="divide-y divide-[var(--border)]">
+              {responses.length === 0 ? (
+                <div className="p-8 text-center text-[var(--text-muted)]">まだリクエストがありません</div>
+              ) : responses.slice(0, 8).map(r => (
+                <div key={r.id} className="px-6 py-3 flex items-center justify-between table-row">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-2 h-2 rounded-full ${r.status === 'completed' ? 'bg-green-500' : r.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500'}`} />
+                    <div>
+                      <p className="text-sm font-medium mono">{r.id.slice(0, 20)}...</p>
+                      <p className="text-xs text-[var(--text-muted)]">{r.model}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-[var(--text-secondary)]">{timeAgo(r.created_at)}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{r.usage?.total_tokens || 0} tokens</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ============================================
+    // API Keys Page with Bulk Actions
+    // ============================================
+    const ApiKeysPage = ({ api, showToast }) => {
+      const [keys, setKeys] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [showInactive, setShowInactive] = useState(false);
+      const [search, setSearch] = useState('');
+      const [createModal, setCreateModal] = useState(false);
+      const [createdKey, setCreatedKey] = useState(null);
+      const [selectedKey, setSelectedKey] = useState(null);
+      const [keyUsage, setKeyUsage] = useState(null);
+      const [selectedIds, setSelectedIds] = useState(new Set());
+
+      const load = useCallback(async () => {
+        try { const r = await api.listKeys(showInactive); setKeys(r.data || []); setSelectedIds(new Set()); }
+        catch (e) { showToast('読み込み失敗', 'error'); }
+        finally { setLoading(false); }
+      }, [api, showInactive]);
+
+      useEffect(() => { load(); }, [load]);
+
+      const handleCreate = async (data) => {
+        try { const r = await api.createKey(data); setCreatedKey(r); setCreateModal(false); showToast('作成しました', 'success'); load(); }
+        catch (e) { showToast('作成失敗', 'error'); }
+      };
+
+      const handleView = async (k) => {
+        try {
+          const [d, u] = await Promise.all([api.getKey(k.id), api.getUsage(k.id)]);
+          setSelectedKey(d); setKeyUsage(u);
+        } catch (e) { showToast('取得失敗', 'error'); }
+      };
+
+      const handleRevoke = async (id) => {
+        if (!confirm('無効化しますか？')) return;
+        try { await api.revokeKey(id); showToast('無効化しました', 'success'); setSelectedKey(null); load(); }
+        catch (e) { showToast('失敗', 'error'); }
+      };
+
+      const handleDelete = async (id) => {
+        if (!confirm('削除しますか？')) return;
+        try { await api.deleteKey(id); showToast('削除しました', 'success'); setSelectedKey(null); load(); }
+        catch (e) { showToast('失敗', 'error'); }
+      };
+
+      // Bulk actions
+      const handleBulkRevoke = async () => {
+        if (!confirm(`${selectedIds.size}件を無効化しますか？`)) return;
+        try {
+          await Promise.all([...selectedIds].map(id => api.revokeKey(id)));
+          showToast(`${selectedIds.size}件を無効化しました`, 'success');
+          load();
+        } catch (e) { showToast('一部失敗しました', 'error'); load(); }
+      };
+
+      const handleBulkDelete = async () => {
+        if (!confirm(`${selectedIds.size}件を削除しますか？この操作は取り消せません。`)) return;
+        try {
+          await Promise.all([...selectedIds].map(id => api.deleteKey(id)));
+          showToast(`${selectedIds.size}件を削除しました`, 'success');
+          load();
+        } catch (e) { showToast('一部失敗しました', 'error'); load(); }
+      };
+
+      const handleExport = (format) => {
+        const data = keys.filter(k => selectedIds.size === 0 || selectedIds.has(k.id));
+        if (format === 'json') {
+          downloadFile(JSON.stringify(data, null, 2), 'api-keys.json', 'application/json');
+        } else {
+          const csv = [
+            ['ID', 'Name', 'Key', 'Scopes', 'Status', 'Created', 'Last Used', 'Rate Limit'].join(','),
+            ...data.map(k => [k.id, k.name, k.key, k.scopes.join(';'), k.is_active ? 'Active' : 'Inactive', formatDate(k.created_at), formatDate(k.last_used_at), k.rate_limit || ''].join(','))
+          ].join('\n');
+          downloadFile(csv, 'api-keys.csv', 'text/csv');
+        }
+        showToast('エクスポートしました', 'success');
+      };
+
+      const toggleSelect = (id) => {
+        const next = new Set(selectedIds);
+        next.has(id) ? next.delete(id) : next.add(id);
+        setSelectedIds(next);
+      };
+
+      const toggleSelectAll = () => {
+        setSelectedIds(selectedIds.size === filtered.length ? new Set() : new Set(filtered.map(k => k.id)));
+      };
+
+      const filtered = useMemo(() => keys.filter(k => k.name.toLowerCase().includes(search.toLowerCase()) || k.id.includes(search)), [keys, search]);
+
+      return (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+            <div>
+              <h2 className="text-2xl font-bold">APIキー管理</h2>
+              <p className="text-[var(--text-muted)] mt-1">クライアント用APIキーの発行・管理</p>
+            </div>
+            <button onClick={() => setCreateModal(true)} className="btn-primary flex items-center gap-2"><Icons.Plus />新規作成</button>
+          </div>
+
+          {/* Filters & Bulk Actions */}
+          <div className="card p-4">
+            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center flex-1 w-full">
+                <div className="relative flex-1 w-full sm:max-w-xs">
+                  <input type="text" placeholder="検索..." value={search} onChange={e => setSearch(e.target.value)} className="input-field pl-10 w-full" />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"><Icons.Search /></div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                  <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded" />
+                  <span className="text-sm">無効も表示</span>
+                </label>
+              </div>
+              
+              {/* Bulk Actions */}
+              <div className="flex gap-2 flex-wrap">
+                {selectedIds.size > 0 && (
+                  <>
+                    <span className="text-sm text-[var(--text-muted)] self-center mr-2">{selectedIds.size}件選択</span>
+                    <button onClick={handleBulkRevoke} className="btn-secondary text-sm py-2 px-3 flex items-center gap-1">
+                      <Icons.Ban />無効化
+                    </button>
+                    <button onClick={handleBulkDelete} className="btn-danger text-sm py-2 px-3 flex items-center gap-1">
+                      <Icons.Trash />削除
+                    </button>
+                  </>
+                )}
+                <div className="relative group">
+                  <button className="btn-secondary text-sm py-2 px-3 flex items-center gap-1">
+                    <Icons.Download />エクスポート
+                  </button>
+                  <div className="absolute right-0 mt-1 w-32 card p-1 hidden group-hover:block z-10">
+                    <button onClick={() => handleExport('csv')} className="w-full text-left px-3 py-2 text-sm rounded hover:bg-[var(--bg-tertiary)]">CSV</button>
+                    <button onClick={() => handleExport('json')} className="w-full text-left px-3 py-2 text-sm rounded hover:bg-[var(--bg-tertiary)]">JSON</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Keys Table */}
+          <div className="card overflow-hidden">
+            {loading ? <div className="flex justify-center py-16"><Spinner /></div> : filtered.length === 0 ? (
+              <div className="py-16 text-center text-[var(--text-muted)]">{search ? '検索結果なし' : 'APIキーがありません'}</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-[var(--bg-tertiary)]">
+                    <tr>
+                      <th className="px-4 py-3 text-left">
+                        <Checkbox checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">キー名</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">キー</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">スコープ</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">状態</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">最終使用</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {filtered.map(k => (
+                      <tr key={k.id} className={`table-row ${selectedIds.has(k.id) ? 'bg-indigo-500/5' : ''}`}>
+                        <td className="px-4 py-3">
+                          <Checkbox checked={selectedIds.has(k.id)} onChange={() => toggleSelect(k.id)} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{k.name}</p>
+                          <p className="text-xs text-[var(--text-muted)] mono">{k.id}</p>
+                        </td>
+                        <td className="px-4 py-3"><code className="text-sm key-blur cursor-help">{k.key}</code></td>
+                        <td className="px-4 py-3"><div className="flex gap-1 flex-wrap">{k.scopes.map(s => <ScopeBadge key={s} scope={s} />)}</div></td>
+                        <td className="px-4 py-3"><StatusBadge isActive={k.is_active} expiresAt={k.expires_at} /></td>
+                        <td className="px-4 py-3 text-sm text-[var(--text-secondary)]">{timeAgo(k.last_used_at)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-center gap-1">
+                            <button onClick={() => handleView(k)} className="p-2 text-[var(--text-muted)] hover:text-indigo-500 hover:bg-indigo-500/10 rounded-lg" title="詳細"><Icons.Eye /></button>
+                            {k.is_active && <button onClick={() => handleRevoke(k.id)} className="p-2 text-[var(--text-muted)] hover:text-orange-500 hover:bg-orange-500/10 rounded-lg" title="無効化"><Icons.Ban /></button>}
+                            <button onClick={() => handleDelete(k.id)} className="p-2 text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 rounded-lg" title="削除"><Icons.Trash /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Modals */}
+          <Modal isOpen={createModal} onClose={() => setCreateModal(false)} title="新規APIキー作成">
+            <CreateKeyForm onSubmit={handleCreate} onCancel={() => setCreateModal(false)} />
+          </Modal>
+          <Modal isOpen={!!createdKey} onClose={() => setCreatedKey(null)} title="APIキー作成完了">
+            {createdKey && <CreatedKeyDisplay data={createdKey} onClose={() => setCreatedKey(null)} />}
+          </Modal>
+          <Modal isOpen={!!selectedKey} onClose={() => setSelectedKey(null)} title={selectedKey?.name} size="lg">
+            {selectedKey && <KeyDetail apiKey={selectedKey} usage={keyUsage} onRevoke={handleRevoke} onDelete={handleDelete} onClose={() => setSelectedKey(null)} />}
+          </Modal>
+        </div>
+      );
+    };
+
+    // Create Key Form
+    const CreateKeyForm = ({ onSubmit, onCancel }) => {
+      const [form, setForm] = useState({ name: '', scopes: ['responses', 'chat'], rate_limit: '', expires_in_days: '' });
+      const toggle = (s) => setForm(p => ({ ...p, scopes: p.scopes.includes(s) ? p.scopes.filter(x => x !== s) : [...p.scopes, s] }));
+      const submit = (e) => { e.preventDefault(); const d = { name: form.name, scopes: form.scopes }; if (form.rate_limit) d.rate_limit = parseInt(form.rate_limit); if (form.expires_in_days) d.expires_in_days = parseInt(form.expires_in_days); onSubmit(d); };
+      return (
+        <form onSubmit={submit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium mb-2">キー名 *</label>
+            <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="例: Production App" className="input-field" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-3">スコープ</label>
+            <div className="flex flex-wrap gap-3">
+              {[{ id: 'responses', label: 'Responses API' }, { id: 'chat', label: 'Chat API' }, { id: 'admin', label: '管理者' }].map(s => (
+                <label key={s.id} className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition ${form.scopes.includes(s.id) ? 'border-indigo-500 bg-indigo-500/10' : 'border-[var(--border)] hover:border-indigo-300'}`}>
+                  <input type="checkbox" checked={form.scopes.includes(s.id)} onChange={() => toggle(s.id)} className="sr-only" />
+                  <span className="font-medium">{s.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">レート制限</label>
+              <div className="relative"><input type="number" value={form.rate_limit} onChange={e => setForm({ ...form, rate_limit: e.target.value })} placeholder="無制限" className="input-field pr-16" /><span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] text-sm">回/分</span></div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">有効期限</label>
+              <div className="relative"><input type="number" value={form.expires_in_days} onChange={e => setForm({ ...form, expires_in_days: e.target.value })} placeholder="無期限" className="input-field pr-12" /><span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] text-sm">日後</span></div>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4"><button type="submit" className="btn-primary flex-1">作成</button><button type="button" onClick={onCancel} className="btn-secondary flex-1">キャンセル</button></div>
+        </form>
+      );
+    };
+
+    // Created Key Display
+    const CreatedKeyDisplay = ({ data, onClose }) => {
+      const [copied, setCopied] = useState(false);
+      const copy = async () => { await navigator.clipboard.writeText(data.key); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+      return (
+        <div className="space-y-6">
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div><p className="font-semibold text-amber-600">このキーは一度しか表示されません</p><p className="text-sm text-amber-600/80 mt-1">必ず安全な場所に保存してください。</p></div>
+          </div>
+          <div className="bg-[var(--bg-tertiary)] rounded-xl p-4">
+            <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">APIキー</label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-[var(--bg-secondary)] px-4 py-3 rounded-lg border border-[var(--border)] mono text-sm break-all select-all">{data.key}</code>
+              <button onClick={copy} className={`px-4 py-3 rounded-lg font-medium flex items-center gap-2 transition ${copied ? 'bg-green-500 text-white' : 'btn-primary'}`}>{copied ? <><Icons.Check /> コピー済み</> : <><Icons.Copy /> コピー</>}</button>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-full bg-[var(--text-primary)] text-[var(--bg-primary)] py-3 rounded-xl font-medium hover:opacity-90">閉じる</button>
+        </div>
+      );
+    };
+
+    // Key Detail with Usage Chart
+    const KeyDetail = ({ apiKey, usage, onRevoke, onDelete, onClose }) => (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          {[{ l: 'キーID', v: <span className="mono text-xs">{apiKey.id}</span> }, { l: 'ステータス', v: <StatusBadge isActive={apiKey.is_active} expiresAt={apiKey.expires_at} /> }, { l: '作成日時', v: formatDate(apiKey.created_at) }, { l: '最終使用', v: apiKey.last_used_at ? formatDate(apiKey.last_used_at) : '未使用' }, { l: '有効期限', v: apiKey.expires_at ? formatDate(apiKey.expires_at) : '無期限' }, { l: 'レート制限', v: apiKey.rate_limit ? `${apiKey.rate_limit}回/分` : '無制限' }].map((i, idx) => (
+            <div key={idx} className="bg-[var(--bg-tertiary)] rounded-xl p-4"><p className="text-xs text-[var(--text-muted)] mb-1">{i.l}</p><p>{i.v}</p></div>
+          ))}
+        </div>
+        <div><label className="block text-sm font-medium mb-2">スコープ</label><div className="flex gap-2 flex-wrap">{apiKey.scopes.map(s => <ScopeBadge key={s} scope={s} />)}</div></div>
+        {usage && (
+          <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl p-6">
+            <h4 className="font-semibold mb-4">使用量サマリー</h4>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div><p className="text-3xl font-bold text-indigo-500">{formatNum(usage.summary?.total_requests)}</p><p className="text-sm text-[var(--text-muted)] mt-1">リクエスト</p></div>
+              <div><p className="text-3xl font-bold text-purple-500">{formatNum(usage.summary?.total_input_tokens)}</p><p className="text-sm text-[var(--text-muted)] mt-1">入力トークン</p></div>
+              <div><p className="text-3xl font-bold text-pink-500">{formatNum(usage.summary?.total_output_tokens)}</p><p className="text-sm text-[var(--text-muted)] mt-1">出力トークン</p></div>
+            </div>
+            {usage.daily?.length > 0 && (
+              <div className="mt-4 h-40">
+                <UsageChart data={usage.daily} type="bar" />
+              </div>
+            )}
+          </div>
+        )}
+        <div className="flex gap-3 pt-4 border-t border-[var(--border)]">
+          {apiKey.is_active && <button onClick={() => onRevoke(apiKey.id)} className="flex-1 bg-orange-500 text-white py-3 rounded-xl font-medium hover:bg-orange-600">無効化</button>}
+          <button onClick={() => onDelete(apiKey.id)} className="flex-1 bg-red-500 text-white py-3 rounded-xl font-medium hover:bg-red-600">削除</button>
+          <button onClick={onClose} className="flex-1 btn-secondary py-3">閉じる</button>
+        </div>
+      </div>
+    );
+
+    // ============================================
+    // Responses Page
+    // ============================================
+    const ResponsesPage = ({ api, showToast }) => {
+      const [responses, setResponses] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [selected, setSelected] = useState(null);
+      const [search, setSearch] = useState('');
+      const [selectedIds, setSelectedIds] = useState(new Set());
+
+      const load = useCallback(async () => {
+        try { const r = await api.listResponses(100); setResponses(r.data || []); setSelectedIds(new Set()); }
+        catch (e) { showToast('読み込み失敗', 'error'); }
+        finally { setLoading(false); }
+      }, [api]);
+
+      useEffect(() => { load(); }, [load]);
+
+      const handleDelete = async (id) => {
+        if (!confirm('削除しますか？')) return;
+        try { await api.deleteResponse(id); showToast('削除しました', 'success'); setSelected(null); load(); }
+        catch (e) { showToast('失敗', 'error'); }
+      };
+
+      const handleBulkDelete = async () => {
+        if (!confirm(`${selectedIds.size}件を削除しますか？`)) return;
+        try {
+          await Promise.all([...selectedIds].map(id => api.deleteResponse(id)));
+          showToast(`${selectedIds.size}件を削除しました`, 'success');
+          load();
+        } catch (e) { showToast('一部失敗しました', 'error'); load(); }
+      };
+
+      const handleExport = () => {
+        const data = responses.filter(r => selectedIds.size === 0 || selectedIds.has(r.id));
+        downloadFile(JSON.stringify(data, null, 2), 'responses.json', 'application/json');
+        showToast('エクスポートしました', 'success');
+      };
+
+      const toggleSelect = (id) => {
+        const next = new Set(selectedIds);
+        next.has(id) ? next.delete(id) : next.add(id);
+        setSelectedIds(next);
+      };
+
+      const filtered = useMemo(() => responses.filter(r => r.id.includes(search) || r.model?.includes(search)), [responses, search]);
+      const statusColors = { completed: 'badge-success', failed: 'badge-danger', cancelled: 'badge-warning', in_progress: 'badge-info', queued: 'badge-info' };
+
+      return (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+            <div><h2 className="text-2xl font-bold">レスポンス履歴</h2><p className="text-[var(--text-muted)] mt-1">過去のAPIリクエスト</p></div>
+            <button onClick={load} className="btn-secondary flex items-center gap-2"><Icons.Refresh />更新</button>
+          </div>
+
+          <div className="card p-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div className="relative flex-1 w-full sm:max-w-xs">
+                <input type="text" placeholder="ID/モデルで検索..." value={search} onChange={e => setSearch(e.target.value)} className="input-field pl-10 w-full" />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"><Icons.Search /></div>
+              </div>
+              <div className="flex gap-2">
+                {selectedIds.size > 0 && (
+                  <>
+                    <span className="text-sm text-[var(--text-muted)] self-center mr-2">{selectedIds.size}件選択</span>
+                    <button onClick={handleBulkDelete} className="btn-danger text-sm py-2 px-3 flex items-center gap-1"><Icons.Trash />削除</button>
+                  </>
+                )}
+                <button onClick={handleExport} className="btn-secondary text-sm py-2 px-3 flex items-center gap-1"><Icons.Download />JSON</button>
+              </div>
+            </div>
+          </div>
+
+          <div className="card overflow-hidden">
+            {loading ? <div className="flex justify-center py-16"><Spinner /></div> : filtered.length === 0 ? (
+              <div className="py-16 text-center text-[var(--text-muted)]">履歴がありません</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-[var(--bg-tertiary)]">
+                    <tr>
+                      <th className="px-4 py-3 text-left"><Checkbox checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={() => setSelectedIds(selectedIds.size === filtered.length ? new Set() : new Set(filtered.map(r => r.id)))} /></th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">モデル</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">状態</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">トークン</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">作成日時</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {filtered.map(r => (
+                      <tr key={r.id} className={`table-row ${selectedIds.has(r.id) ? 'bg-indigo-500/5' : ''}`}>
+                        <td className="px-4 py-3"><Checkbox checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} /></td>
+                        <td className="px-4 py-3"><code className="text-sm">{r.id.slice(0, 24)}...</code></td>
+                        <td className="px-4 py-3 text-sm">{r.model}</td>
+                        <td className="px-4 py-3"><span className={`badge ${statusColors[r.status] || 'badge-info'}`}>{r.status}</span></td>
+                        <td className="px-4 py-3 text-sm">{formatNum(r.usage?.total_tokens)}</td>
+                        <td className="px-4 py-3 text-sm text-[var(--text-secondary)]">{formatDate(r.created_at)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-center gap-1">
+                            <button onClick={() => setSelected(r)} className="p-2 text-[var(--text-muted)] hover:text-indigo-500 hover:bg-indigo-500/10 rounded-lg"><Icons.Eye /></button>
+                            <button onClick={() => handleDelete(r.id)} className="p-2 text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 rounded-lg"><Icons.Trash /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <Modal isOpen={!!selected} onClose={() => setSelected(null)} title="レスポンス詳細" size="lg">
+            {selected && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="bg-[var(--bg-tertiary)] rounded-xl p-4"><p className="text-[var(--text-muted)] mb-1">ID</p><code>{selected.id}</code></div>
+                  <div className="bg-[var(--bg-tertiary)] rounded-xl p-4"><p className="text-[var(--text-muted)] mb-1">モデル</p><p>{selected.model}</p></div>
+                  <div className="bg-[var(--bg-tertiary)] rounded-xl p-4"><p className="text-[var(--text-muted)] mb-1">状態</p><span className={`badge ${statusColors[selected.status]}`}>{selected.status}</span></div>
+                  <div className="bg-[var(--bg-tertiary)] rounded-xl p-4"><p className="text-[var(--text-muted)] mb-1">作成日時</p><p>{formatDate(selected.created_at)}</p></div>
+                </div>
+                {selected.output_text && <div><label className="block text-sm font-medium mb-2">出力</label><div className="bg-gray-900 text-gray-100 rounded-xl p-4 mono text-sm max-h-64 overflow-y-auto whitespace-pre-wrap">{selected.output_text}</div></div>}
+                {selected.usage && (
+                  <div className="bg-indigo-500/10 rounded-xl p-4">
+                    <p className="font-medium mb-2">使用量</p>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div><p className="text-xl font-bold text-indigo-500">{formatNum(selected.usage.input_tokens)}</p><p className="text-xs text-[var(--text-muted)]">入力</p></div>
+                      <div><p className="text-xl font-bold text-purple-500">{formatNum(selected.usage.output_tokens)}</p><p className="text-xs text-[var(--text-muted)]">出力</p></div>
+                      <div><p className="text-xl font-bold text-pink-500">{formatNum(selected.usage.total_tokens)}</p><p className="text-xs text-[var(--text-muted)]">合計</p></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </Modal>
+        </div>
+      );
+    };
+
+    // ============================================
+    // Playground Page
+    // ============================================
+    const PlaygroundPage = ({ api, showToast }) => {
+      const [mode, setMode] = useState('responses'); // 'responses' or 'chat'
+      const [input, setInput] = useState('');
+      const [model, setModel] = useState('gpt-5.2-codex');
+      const [result, setResult] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const [history, setHistory] = useState([]);
+
+      const run = async () => {
+        if (!input.trim()) return;
+        setLoading(true);
+        setResult(null);
+        try {
+          let res;
+          if (mode === 'responses') {
+            res = await api.createResponse({ model, input });
+          } else {
+            res = await api.chatCompletion({
+              model,
+              messages: [{ role: 'user', content: input }],
+            });
+          }
+          setResult(res);
+          setHistory(h => [{ time: new Date(), mode, input, result: res }, ...h].slice(0, 20));
+          showToast('実行完了', 'success');
+        } catch (e) {
+          setResult({ error: e.message });
+          showToast('実行失敗', 'error');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="space-y-6 animate-fade-in">
+          <div><h2 className="text-2xl font-bold">API Playground</h2><p className="text-[var(--text-muted)] mt-1">APIをブラウザから直接テスト</p></div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Input Panel */}
+            <div className="card p-6 space-y-4">
+              <div className="flex gap-2">
+                <button onClick={() => setMode('responses')} className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${mode === 'responses' ? 'bg-indigo-500 text-white' : 'bg-[var(--bg-tertiary)]'}`}>Responses API</button>
+                <button onClick={() => setMode('chat')} className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${mode === 'chat' ? 'bg-indigo-500 text-white' : 'bg-[var(--bg-tertiary)]'}`}>Chat API</button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">モデル</label>
+                <select value={model} onChange={e => setModel(e.target.value)} className="input-field">
+                  <option value="gpt-5.2-codex">gpt-5.2-codex</option>
+                  <option value="o3-mini">o3-mini</option>
+                  <option value="o1-pro">o1-pro</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">入力</label>
+                <textarea
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder={mode === 'responses' ? 'プロンプトを入力...' : 'メッセージを入力...'}
+                  className="input-field h-40 resize-none"
+                />
+              </div>
+
+              <button onClick={run} disabled={loading || !input.trim()} className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-50">
+                {loading ? <Spinner size="sm" /> : <Icons.Play />}
+                {loading ? '実行中...' : '実行'}
+              </button>
+            </div>
+
+            {/* Output Panel */}
+            <div className="card p-6">
+              <h3 className="font-semibold mb-4">結果</h3>
+              {result ? (
+                <div className="space-y-4">
+                  {result.error ? (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-500">{result.error}</div>
+                  ) : (
+                    <>
+                      <div className="bg-gray-900 text-gray-100 rounded-xl p-4 mono text-sm max-h-80 overflow-y-auto whitespace-pre-wrap scrollbar-thin">
+                        {result.output_text || result.choices?.[0]?.message?.content || JSON.stringify(result, null, 2)}
+                      </div>
+                      {result.usage && (
+                        <div className="flex gap-4 text-sm text-[var(--text-muted)]">
+                          <span>入力: {result.usage.input_tokens}</span>
+                          <span>出力: {result.usage.output_tokens}</span>
+                          <span>合計: {result.usage.total_tokens}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="h-64 flex items-center justify-center text-[var(--text-muted)]">結果がここに表示されます</div>
+              )}
+            </div>
+          </div>
+
+          {/* History */}
+          {history.length > 0 && (
+            <div className="card">
+              <div className="px-6 py-4 border-b border-[var(--border)]"><h3 className="font-semibold">実行履歴</h3></div>
+              <div className="divide-y divide-[var(--border)] max-h-64 overflow-y-auto scrollbar-thin">
+                {history.map((h, i) => (
+                  <div key={i} className="px-6 py-3 flex items-center justify-between table-row cursor-pointer" onClick={() => { setMode(h.mode); setInput(h.input); setResult(h.result); }}>
+                    <div>
+                      <p className="text-sm font-medium">{h.input.slice(0, 50)}...</p>
+                      <p className="text-xs text-[var(--text-muted)]">{h.mode} • {h.time.toLocaleTimeString()}</p>
+                    </div>
+                    <span className={`badge ${h.result.error ? 'badge-danger' : 'badge-success'}`}>{h.result.error ? 'Error' : 'OK'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ============================================
+    // Logs Page
+    // ============================================
+    const LogsPage = ({ api, showToast }) => {
+      const [logs, setLogs] = useState([]);
+      const [filter, setFilter] = useState('all');
+      const [autoScroll, setAutoScroll] = useState(true);
+      const logsEndRef = useRef(null);
+
+      // Simulate logs (in real implementation, this would be WebSocket)
+      useEffect(() => {
+        const types = ['info', 'success', 'warning', 'error'];
+        const messages = [
+          'API request received from client',
+          'Response generated successfully',
+          'Rate limit warning for key xxx',
+          'Authentication failed for invalid key',
+          'Background job completed',
+          'New API key created',
+          'Connection established',
+        ];
+        
+        const addLog = () => {
+          const type = types[Math.floor(Math.random() * types.length)];
+          const message = messages[Math.floor(Math.random() * messages.length)];
+          setLogs(l => [...l.slice(-99), { id: Date.now(), time: new Date(), type, message }]);
+        };
+
+        // Add initial logs
+        for (let i = 0; i < 10; i++) addLog();
+
+        const interval = setInterval(addLog, 3000);
+        return () => clearInterval(interval);
+      }, []);
+
+      useEffect(() => {
+        if (autoScroll) logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [logs, autoScroll]);
+
+      const filtered = filter === 'all' ? logs : logs.filter(l => l.type === filter);
+
+      const handleExport = () => {
+        const content = logs.map(l => `[${l.time.toISOString()}] [${l.type.toUpperCase()}] ${l.message}`).join('\n');
+        downloadFile(content, 'logs.txt');
+        showToast('エクスポートしました', 'success');
+      };
+
+      return (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+            <div><h2 className="text-2xl font-bold">リアルタイムログ</h2><p className="text-[var(--text-muted)] mt-1">サーバーログのライブ表示</p></div>
+            <div className="flex gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded" />
+                <span className="text-sm">自動スクロール</span>
+              </label>
+              <button onClick={handleExport} className="btn-secondary text-sm py-2 px-3 flex items-center gap-1"><Icons.Download />エクスポート</button>
+            </div>
+          </div>
+
+          <div className="card p-4">
+            <div className="flex gap-2">
+              {['all', 'info', 'success', 'warning', 'error'].map(f => (
+                <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filter === f ? 'bg-indigo-500 text-white' : 'bg-[var(--bg-tertiary)]'}`}>
+                  {f === 'all' ? 'すべて' : f.charAt(0).toUpperCase() + f.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="h-96 overflow-y-auto scrollbar-thin p-4 bg-gray-900 rounded-xl mono text-sm">
+              {filtered.map(log => (
+                <div key={log.id} className={`log-line log-${log.type}`}>
+                  <span className="text-gray-500">[{log.time.toLocaleTimeString()}]</span>
+                  <span className={`ml-2 ${log.type === 'error' ? 'text-red-400' : log.type === 'warning' ? 'text-yellow-400' : log.type === 'success' ? 'text-green-400' : 'text-blue-400'}`}>[{log.type.toUpperCase()}]</span>
+                  <span className="ml-2 text-gray-300">{log.message}</span>
+                </div>
+              ))}
+              <div ref={logsEndRef} />
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ============================================
+    // Settings Page
+    // ============================================
+    const SettingsPage = ({ api, serverUrl, showToast }) => {
+      const [health, setHealth] = useState(null);
+      const [config, setConfig] = useState(null);
+      const [tunnel, setTunnel] = useState({ active: false, url: null });
+      const [loading, setLoading] = useState(true);
+      const [tunnelLoading, setTunnelLoading] = useState(false);
+      const [portInput, setPortInput] = useState('');
+      const { dark, toggle } = useTheme();
+      const [notifications, setNotifications] = useState({
+        rateLimit: true,
+        expiration: true,
+        errors: false,
+      });
+      const [copied, setCopied] = useState(false);
+
+      const loadData = useCallback(async () => {
+        try {
+          const [h, c, t] = await Promise.all([
+            api.health(),
+            api.getConfig().catch(() => null),
+            api.tunnelStatus().catch(() => ({ active: false })),
+          ]);
+          setHealth(h);
+          setConfig(c);
+          setTunnel(t);
+          if (c?.port) setPortInput(String(c.port));
+        } catch (e) {
+          showToast('読み込み失敗', 'error');
+        } finally {
+          setLoading(false);
+        }
+      }, [api]);
+
+      useEffect(() => { loadData(); }, [loadData]);
+
+      const handleTunnelStart = async () => {
+        setTunnelLoading(true);
+        try {
+          const result = await api.tunnelStart();
+          setTunnel(result);
+          if (result.url) showToast('トンネルを開始しました', 'success');
+        } catch (e) {
+          showToast(e.message || 'トンネル開始失敗', 'error');
+        } finally {
+          setTunnelLoading(false);
+        }
+      };
+
+      const handleTunnelStop = async () => {
+        try {
+          await api.tunnelStop();
+          setTunnel({ active: false, url: null });
+          showToast('トンネルを停止しました', 'success');
+        } catch (e) {
+          showToast('トンネル停止失敗', 'error');
+        }
+      };
+
+      const handlePortSave = async () => {
+        const port = parseInt(portInput);
+        if (isNaN(port) || port < 1 || port > 65535) {
+          showToast('有効なポート番号を入力してください', 'error');
+          return;
+        }
+        try {
+          const result = await api.updateConfig({ port });
+          showToast(result.requiresRestart ? 'ポート設定を保存しました（再起動後に適用）' : '設定を更新しました', 'success');
+        } catch (e) {
+          showToast('設定更新失敗', 'error');
+        }
+      };
+
+      const copyUrl = async (url) => {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      };
+
+      if (loading) return <div className="flex justify-center h-64"><Spinner size="lg" /></div>;
+
+      return (
+        <div className="space-y-6 animate-fade-in">
+          <div><h2 className="text-2xl font-bold">設定</h2><p className="text-[var(--text-muted)] mt-1">サーバー設定と接続情報</p></div>
+
+          {/* Cloudflare Tunnel */}
+          <div className="card p-6">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <svg className="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12.5c.5.5.5 1.5 0 2l-3 3c-.5.5-1.5.5-2 0l-3-3c-.5-.5-.5-1.5 0-2l3-3c.5-.5 1.5-.5 2 0l3 3zM12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/></svg>
+              Cloudflare Tunnel
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <div>
+                  <span className="text-[var(--text-secondary)]">状態</span>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">サーバーを外部に公開</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`status-dot ${tunnel.active ? 'status-online' : 'status-offline'}`} />
+                  <span className={tunnel.active ? 'text-green-500' : 'text-[var(--text-muted)]'}>
+                    {tunnel.active ? '接続中' : '未接続'}
+                  </span>
+                </div>
+              </div>
+              
+              {tunnel.active && tunnel.url && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                  <p className="text-sm text-green-600 mb-2">公開URL</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 bg-[var(--bg-secondary)] px-3 py-2 rounded-lg text-sm break-all">{tunnel.url}</code>
+                    <button onClick={() => copyUrl(tunnel.url)} className={`px-3 py-2 rounded-lg text-sm font-medium ${copied ? 'bg-green-500 text-white' : 'btn-secondary'}`}>
+                      {copied ? '✓' : 'コピー'}
+                    </button>
+                    <a href={tunnel.url} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-2 text-sm">開く</a>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <a href={`${tunnel.url}/docs`} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-500 hover:underline">📖 Swagger UI</a>
+                    <span className="text-[var(--text-muted)]">|</span>
+                    <a href={`${tunnel.url}/admin`} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-500 hover:underline">⚙️ 管理画面</a>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex gap-3">
+                {tunnel.active ? (
+                  <button onClick={handleTunnelStop} className="btn-danger flex items-center gap-2 px-4 py-2">
+                    ⏹ トンネル停止
+                  </button>
+                ) : (
+                  <button onClick={handleTunnelStart} disabled={tunnelLoading} className="btn-primary flex items-center gap-2 px-4 py-2 disabled:opacity-50">
+                    {tunnelLoading ? <Spinner size="sm" /> : '▶'}
+                    {tunnelLoading ? '接続中...' : 'トンネル開始'}
+                  </button>
+                )}
+              </div>
+              {!tunnel.active && (
+                <p className="text-xs text-[var(--text-muted)]">
+                  ※ cloudflaredが必要です: <code className="bg-[var(--bg-tertiary)] px-1 rounded">npm i -g cloudflared</code>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* API Documentation */}
+          <div className="card p-6">
+            <h3 className="font-semibold mb-4">📖 APIドキュメント</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <div>
+                  <span className="text-[var(--text-secondary)]">Swagger UI</span>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">インタラクティブなAPI仕様書</p>
+                </div>
+                <a href={`${serverUrl}/docs`} target="_blank" rel="noopener noreferrer" className="btn-primary px-4 py-2 text-sm">
+                  開く →
+                </a>
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <span className="text-[var(--text-secondary)]">OpenAPI Spec</span>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">JSON形式のAPI仕様</p>
+                </div>
+                <a href={`${serverUrl}/openapi.json`} target="_blank" rel="noopener noreferrer" className="btn-secondary px-4 py-2 text-sm">
+                  JSON →
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Appearance */}
+          <div className="card p-6">
+            <h3 className="font-semibold mb-4">外観</h3>
+            <div className="flex items-center justify-between py-3">
+              <div className="flex items-center gap-3">
+                {dark ? <Icons.Moon /> : <Icons.Sun />}
+                <span>ダークモード</span>
+              </div>
+              <button onClick={toggle} className={`toggle-switch ${dark ? 'active' : ''}`} />
+            </div>
+          </div>
+
+          {/* Server Settings */}
+          <div className="card p-6">
+            <h3 className="font-semibold mb-4">サーバー設定</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <div>
+                  <span className="text-[var(--text-secondary)]">ポート番号</span>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">変更は再起動後に適用</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={portInput}
+                    onChange={e => setPortInput(e.target.value)}
+                    className="input-field w-24 text-center"
+                    min="1"
+                    max="65535"
+                  />
+                  <button onClick={handlePortSave} className="btn-secondary px-3 py-2 text-sm">保存</button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <span className="text-[var(--text-secondary)]">現在のURL</span>
+                <code className="bg-[var(--bg-tertiary)] px-3 py-1 rounded-lg text-sm">{serverUrl}</code>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <span className="text-[var(--text-secondary)]">サーバー状態</span>
+                <div className="flex items-center gap-2">
+                  <span className={`status-dot ${health?.status === 'ok' ? 'status-online' : 'status-offline'}`} />
+                  <span className={health?.status === 'ok' ? 'text-green-500' : 'text-red-500'}>
+                    {health?.status === 'ok' ? 'オンライン' : 'オフライン'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <span className="text-[var(--text-secondary)]">デフォルトモデル</span>
+                <code className="bg-[var(--bg-tertiary)] px-3 py-1 rounded-lg text-sm">{health?.config?.defaultModel}</code>
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <span className="text-[var(--text-secondary)]">デバッグモード</span>
+                <span className={health?.config?.debug ? 'text-orange-500' : ''}>{health?.config?.debug ? '有効' : '無効'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Notifications */}
+          <div className="card p-6">
+            <h3 className="font-semibold mb-4">通知設定</h3>
+            <div className="space-y-4">
+              {[
+                { key: 'rateLimit', label: 'レート制限警告', desc: 'APIキーがレート制限に近づいたとき' },
+                { key: 'expiration', label: '有効期限アラート', desc: 'APIキーの有効期限が近づいたとき' },
+                { key: 'errors', label: 'エラー通知', desc: 'APIエラーが発生したとき' },
+              ].map(n => (
+                <div key={n.key} className="flex items-center justify-between py-3 border-b border-[var(--border)] last:border-0">
+                  <div>
+                    <p className="font-medium">{n.label}</p>
+                    <p className="text-sm text-[var(--text-muted)]">{n.desc}</p>
+                  </div>
+                  <button onClick={() => setNotifications(p => ({ ...p, [n.key]: !p[n.key] }))} className={`toggle-switch ${notifications[n.key] ? 'active' : ''}`} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Codex CLI */}
+          <div className="card p-6">
+            <h3 className="font-semibold mb-4">Codex CLI</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <span className="text-[var(--text-secondary)]">インストール</span>
+                <span className={health?.codex?.installed ? 'text-green-500' : 'text-red-500'}>
+                  {health?.codex?.installed ? '✓ インストール済み' : '✗ 未インストール'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <span className="text-[var(--text-secondary)]">認証状態</span>
+                <span className={health?.codex?.authenticated ? 'text-green-500' : 'text-red-500'}>
+                  {health?.codex?.authenticated ? '✓ 認証済み' : '✗ 未認証'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <span className="text-[var(--text-secondary)]">認証方法</span>
+                <span>{health?.codex?.authMethod === 'chatgpt' ? 'ChatGPTアカウント' : health?.codex?.authMethod === 'api_key' ? 'APIキー' : '-'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Storage */}
+          <div className="card p-6">
+            <h3 className="font-semibold mb-4">ストレージ</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-[var(--bg-tertiary)] rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-indigo-500">{formatNum(health?.storage?.totalResponses)}</p>
+                <p className="text-sm text-[var(--text-muted)] mt-1">レスポンス</p>
+              </div>
+              <div className="bg-[var(--bg-tertiary)] rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-purple-500">{formatNum(health?.storage?.totalConversations)}</p>
+                <p className="text-sm text-[var(--text-muted)] mt-1">会話</p>
+              </div>
+              <div className="bg-[var(--bg-tertiary)] rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-pink-500">{formatNum(health?.storage?.totalInputItems)}</p>
+                <p className="text-sm text-[var(--text-muted)] mt-1">入力アイテム</p>
+              </div>
+              <div className="bg-[var(--bg-tertiary)] rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-orange-500">{formatNum(health?.storage?.backgroundJobs)}</p>
+                <p className="text-sm text-[var(--text-muted)] mt-1">バックグラウンドジョブ</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ============================================
+    // Login Page
+    // ============================================
+    const LoginPage = ({ onLogin }) => {
+      const [serverUrl, setServerUrl] = useState(window.location.origin);
+      const [masterKey, setMasterKey] = useState('');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+      const { dark, toggle } = useTheme();
+
+      const submit = async (e) => {
+        e.preventDefault(); setError(''); setLoading(true);
+        try { const api = createApi(serverUrl, masterKey); await api.health(); await api.getStats(); onLogin(serverUrl, masterKey); }
+        catch (err) { setError('接続に失敗しました。URLとキーを確認してください。'); }
+        finally { setLoading(false); }
+      };
+
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <div className="card w-full max-w-md p-8">
+            <div className="absolute top-4 right-4">
+              <button onClick={toggle} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)]">{dark ? <Icons.Sun /> : <Icons.Moon />}</button>
+            </div>
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 gradient-primary rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg"><span className="text-4xl">🚀</span></div>
+              <h1 className="text-2xl font-bold">Codex API Server</h1>
+              <p className="text-[var(--text-muted)] mt-2">管理コンソールにログイン</p>
+            </div>
+            <form onSubmit={submit} className="space-y-5">
+              <div><label className="block text-sm font-medium mb-2">サーバーURL</label><input type="url" value={serverUrl} onChange={e => setServerUrl(e.target.value)} placeholder="http://localhost:8080" className="input-field" required /></div>
+              <div><label className="block text-sm font-medium mb-2">マスターキー</label><input type="password" value={masterKey} onChange={e => setMasterKey(e.target.value)} placeholder="MASTER_KEY の値" className="input-field" required /></div>
+              {error && <div className="bg-red-500/10 text-red-500 px-4 py-3 rounded-xl text-sm">⚠️ {error}</div>}
+              <button type="submit" disabled={loading} className="w-full btn-primary py-4 flex items-center justify-center gap-2 disabled:opacity-50">{loading ? <><Spinner size="sm" />接続中...</> : 'ログイン'}</button>
+            </form>
+          </div>
+        </div>
+      );
+    };
+
+    // ============================================
+    // Main Layout
+    // ============================================
+    const MainLayout = ({ serverUrl, masterKey, onLogout }) => {
+      const [page, setPage] = useState('dashboard');
+      const [toast, setToast] = useState(null);
+      const [sidebarOpen, setSidebarOpen] = useState(true);
+      const [notifications, setNotifications] = useState([]);
+      const { dark, toggle } = useTheme();
+      
+      const api = useMemo(() => createApi(serverUrl, masterKey), [serverUrl, masterKey]);
+      const showToast = useCallback((msg, type = 'info') => setToast({ message: msg, type }), []);
+
+      // Simulate notifications
+      useEffect(() => {
+        const interval = setInterval(() => {
+          if (Math.random() > 0.8) {
+            setNotifications(n => [...n.slice(-4), { id: Date.now(), message: 'APIキー xxx のレート制限に近づいています', type: 'warning' }]);
+          }
+        }, 10000);
+        return () => clearInterval(interval);
+      }, []);
+
+      const nav = [
+        { id: 'dashboard', icon: <Icons.Dashboard />, label: 'ダッシュボード' },
+        { id: 'apikeys', icon: <Icons.Key />, label: 'APIキー' },
+        { id: 'responses', icon: <Icons.History />, label: '履歴' },
+        { id: 'playground', icon: <Icons.Terminal />, label: 'Playground' },
+        { id: 'logs', icon: <Icons.Log />, label: 'ログ' },
+        { id: 'settings', icon: <Icons.Settings />, label: '設定' },
+      ];
+
+      const renderPage = () => {
+        switch (page) {
+          case 'dashboard': return <DashboardPage api={api} showToast={showToast} />;
+          case 'apikeys': return <ApiKeysPage api={api} showToast={showToast} />;
+          case 'responses': return <ResponsesPage api={api} showToast={showToast} />;
+          case 'playground': return <PlaygroundPage api={api} showToast={showToast} />;
+          case 'logs': return <LogsPage api={api} showToast={showToast} />;
+          case 'settings': return <SettingsPage api={api} serverUrl={serverUrl} showToast={showToast} />;
+          default: return <DashboardPage api={api} showToast={showToast} />;
+        }
+      };
+
+      return (
+        <div className="flex min-h-screen">
+          {/* Mobile menu button */}
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-[var(--bg-secondary)] shadow-lg">
+            <Icons.Menu />
+          </button>
+
+          {/* Sidebar */}
+          <aside className={`sidebar w-64 flex flex-col fixed md:static inset-y-0 left-0 z-40 transition-transform duration-300 ${sidebarOpen ? '' : '-translate-x-full md:translate-x-0'}`}>
+            <div className="p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 gradient-primary rounded-xl flex items-center justify-center text-white font-bold shadow-lg">C</div>
+                <div><h1 className="text-white font-semibold">Codex API</h1><p className="text-gray-400 text-xs">管理コンソール</p></div>
+              </div>
+            </div>
+            <nav className="flex-1 px-2 py-4">
+              {nav.map(n => (
+                <button key={n.id} onClick={() => { setPage(n.id); setSidebarOpen(false); }} className={`sidebar-item w-full flex items-center gap-3 px-4 py-3 text-left text-gray-300 ${page === n.id ? 'active' : ''}`}>
+                  {n.icon}<span>{n.label}</span>
+                </button>
+              ))}
+            </nav>
+            <div className="p-4 border-t border-gray-700 space-y-2">
+              <button onClick={toggle} className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl">
+                {dark ? <Icons.Sun /> : <Icons.Moon />}<span>{dark ? 'ライトモード' : 'ダークモード'}</span>
+              </button>
+              <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl">
+                <Icons.Logout /><span>ログアウト</span>
+              </button>
+            </div>
+          </aside>
+
+          {/* Main Content */}
+          <main className="flex-1 md:ml-0">
+            {/* Top Bar */}
+            <header className="sticky top-0 z-30 bg-[var(--bg-primary)]/80 backdrop-blur border-b border-[var(--border)] px-4 md:px-8 py-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold ml-12 md:ml-0">{nav.find(n => n.id === page)?.label}</h2>
+                <div className="flex items-center gap-4">
+                  {/* Notifications */}
+                  <div className="relative group">
+                    <button className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] relative">
+                      <Icons.Bell />
+                      {notifications.length > 0 && <span className="notification-badge">{notifications.length}</span>}
+                    </button>
+                    {notifications.length > 0 && (
+                      <div className="absolute right-0 mt-2 w-80 card p-2 hidden group-hover:block">
+                        {notifications.map(n => (
+                          <div key={n.id} className="px-3 py-2 text-sm rounded hover:bg-[var(--bg-tertiary)]">
+                            <p className="text-[var(--text-secondary)]">{n.message}</p>
+                          </div>
+                        ))}
+                        <button onClick={() => setNotifications([])} className="w-full text-center text-sm text-indigo-500 py-2 hover:bg-[var(--bg-tertiary)] rounded">すべてクリア</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </header>
+
+            <div className="p-4 md:p-8">{renderPage()}</div>
+          </main>
+
+          {/* Toast */}
+          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+          {/* Mobile overlay */}
+          {sidebarOpen && <div className="md:hidden fixed inset-0 bg-black/50 z-30" onClick={() => setSidebarOpen(false)} />}
+        </div>
+      );
+    };
+
+    // ============================================
+    // App
+    // ============================================
+    const App = () => {
+      const [auth, setAuth] = useState(() => { const s = sessionStorage.getItem('codex_admin_auth'); return s ? JSON.parse(s) : null; });
+      const login = (url, key) => { const d = { serverUrl: url, masterKey: key }; sessionStorage.setItem('codex_admin_auth', JSON.stringify(d)); setAuth(d); };
+      const logout = () => { sessionStorage.removeItem('codex_admin_auth'); setAuth(null); };
+      
+      return (
+        <ThemeProvider>
+          {auth ? <MainLayout serverUrl={auth.serverUrl} masterKey={auth.masterKey} onLogout={logout} /> : <LoginPage onLogin={login} />}
+        </ThemeProvider>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
