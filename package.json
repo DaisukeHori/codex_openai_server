@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "OpenAI API Compatible Server powered by Codex CLI - Desktop Application",
   "main": "dist/main/index.js",
-  "author": "Codex API Server",
+  "author": "DaisukeHori",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -49,11 +49,7 @@
     },
     "files": [
       "dist/**/*",
-      "assets/**/*",
-      "node_modules/**/*",
-      "!node_modules/**/README*",
-      "!node_modules/**/CHANGELOG*",
-      "!node_modules/**/*.md"
+      "node_modules/**/*"
     ],
     "extraResources": [
       {
@@ -72,17 +68,14 @@
           "target": "nsis",
           "arch": ["x64"]
         }
-      ],
-      "icon": "assets/icon.ico"
+      ]
     },
     "mac": {
       "target": ["dmg", "zip"],
-      "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
       "target": ["AppImage", "deb"],
-      "icon": "assets/icon.png",
       "category": "Development"
     },
     "nsis": {
@@ -93,6 +86,11 @@
     },
     "portable": {
       "artifactName": "CodexAPIServer-Portable.exe"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "DaisukeHori",
+      "repo": "codex_openai_server"
     }
   }
 }
