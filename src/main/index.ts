@@ -350,7 +350,7 @@ ipcMain.handle('claude:install', async (event) => {
 ipcMain.handle('server:start', async () => {
   const config = configManager.getServerConfig();
   try {
-    return await startServer(config.port, config.masterKey);
+    return await startServer(config.port, config.masterKey, config.allowLocalWithoutAuth);
   } catch (error) {
     return { running: false, error: error instanceof Error ? error.message : 'Failed to start' };
   }
@@ -411,7 +411,7 @@ app.whenReady().then(async () => {
   if (configManager.isOnboardingComplete() && configManager.get('autoStart')) {
     const config = configManager.getServerConfig();
     try {
-      await startServer(config.port, config.masterKey);
+      await startServer(config.port, config.masterKey, config.allowLocalWithoutAuth);
       console.log('Server auto-started');
       
       // Auto-start tunnel if configured

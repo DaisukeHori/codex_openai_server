@@ -68,42 +68,60 @@ function initDatabase(dbPath: string) {
   return db;
 }
 
-export function startServer(port: number, masterKey: string): Promise<ServerStatus> {
+export function startServer(port: number, masterKey: string, allowLocalWithoutAuth: boolean = true): Promise<ServerStatus> {
   return new Promise((resolve, reject) => {
     if (server) {
       resolve({ running: true, port, url: `http://localhost:${port}` });
       return;
     }
-    
+
     // Initialize database
     configManager.ensureDataDir();
     const dbPath = configManager.getDatabasePath();
     initDatabase(dbPath);
-    
+
     const app = express();
-    
+
     app.use(cors());
     app.use(express.json({ limit: '50mb' }));
-    
+
     // Request ID
     app.use((req, res, next) => {
       res.setHeader('X-Request-Id', uuidv4());
       next();
     });
-    
+
+    // Helper to check if request is from localhost
+    const isLocalRequest = (req: Request): boolean => {
+      const ip = req.ip || req.socket.remoteAddress || '';
+      // Check for IPv4 localhost, IPv6 localhost, and loopback addresses
+      return ip === '127.0.0.1' ||
+             ip === '::1' ||
+             ip === '::ffff:127.0.0.1' ||
+             ip === 'localhost' ||
+             ip.startsWith('::ffff:127.');
+    };
+
     // Auth middleware
     const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
+      // Skip auth if no master key is set
       if (!masterKey) {
         next();
         return;
       }
-      
+
+      // Skip auth for localhost if allowed
+      if (allowLocalWithoutAuth && isLocalRequest(req)) {
+        next();
+        return;
+      }
+
       const authHeader = req.headers.authorization;
       if (!authHeader) {
         res.status(401).json({ error: { message: 'Missing Authorization header' } });
         return;
       }
-      
+
       const token = authHeader.replace('Bearer ', '');
       if (token !== masterKey) {
         // Check API keys in database
@@ -114,7 +132,7 @@ export function startServer(port: number, masterKey: string): Promise<ServerStat
           return;
         }
       }
-      
+
       next();
     };
     
