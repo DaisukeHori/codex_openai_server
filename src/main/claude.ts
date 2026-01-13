@@ -172,7 +172,7 @@ export class ClaudeManager {
         }
       }
 
-      // Actually test if Claude CLI works by running a minimal command
+      // Actually test if Claude Code works by running a minimal command
       // Using --help is fast and doesn't require authentication
       // But to truly test auth, we need to try a simple prompt
       try {
@@ -195,10 +195,10 @@ export class ClaudeManager {
         }
 
         // CLI works but no clear auth method - might still work
-        return { authenticated: true, method: 'subscription', message: 'Claude CLI available' };
+        return { authenticated: true, method: 'subscription', message: 'Claude Code available' };
       } catch (cmdError) {
         // CLI command failed
-        return { authenticated: false, method: null, message: 'Claude CLI not working' };
+        return { authenticated: false, method: null, message: 'Claude Code not working' };
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -214,7 +214,7 @@ export class ClaudeManager {
         version: null,
         authenticated: false,
         authMethod: null,
-        message: 'Claude CLI is not installed. Install with: npm install -g @anthropic-ai/claude-code',
+        message: 'Claude Code is not installed. Install with: npm install -g @anthropic-ai/claude-code',
       };
     }
 
@@ -366,7 +366,7 @@ export class ClaudeManager {
     timeout: number = 120000
   ): Promise<ClaudeResponse> {
     // Convert history to a prompt format
-    // Claude CLI doesn't have native conversation support in -p mode,
+    // Claude Code doesn't have native conversation support in -p mode,
     // so we format it as a structured prompt
     const formattedHistory = history.map(msg => {
       const roleLabel = msg.role === 'user' ? 'Human' : 'Assistant';
@@ -466,7 +466,7 @@ export class ClaudeManager {
       }));
   }
 
-  // Install Claude CLI via npm
+  // Install Claude Code via npm
   async install(
     onProgress: (message: string) => void
   ): Promise<{ success: boolean; message: string; needsManualInstall?: boolean }> {
@@ -475,7 +475,7 @@ export class ClaudeManager {
     if (platform === 'darwin') {
       // macOS: Open Terminal to install with sudo if needed
       return new Promise((resolve) => {
-        onProgress('ターミナルで Claude CLI をインストールします...');
+        onProgress('ターミナルで Claude Code をインストールします...');
 
         // Use osascript to open Terminal and run the install command
         const installCmd = `npm install -g @anthropic-ai/claude-code || sudo npm install -g @anthropic-ai/claude-code; echo ''; echo 'インストール完了。このウィンドウを閉じてアプリで再確認を押してください。'; read -p ''`;
@@ -503,7 +503,7 @@ export class ClaudeManager {
     } else if (platform === 'win32') {
       // Windows: Use PowerShell with admin rights
       return new Promise((resolve) => {
-        onProgress('PowerShell で Claude CLI をインストールします...');
+        onProgress('PowerShell で Claude Code をインストールします...');
 
         const psScript = `
           npm install -g @anthropic-ai/claude-code
@@ -532,7 +532,7 @@ export class ClaudeManager {
     } else {
       // Linux: Open terminal for interactive installation
       return new Promise((resolve) => {
-        onProgress('ターミナルで Claude CLI をインストールします...');
+        onProgress('ターミナルで Claude Code をインストールします...');
 
         const installCmd = 'sudo npm install -g @anthropic-ai/claude-code; echo ""; echo "インストール完了。このウィンドウを閉じてアプリで再確認を押してください。"; read -p ""';
 
