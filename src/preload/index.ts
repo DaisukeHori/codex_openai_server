@@ -29,7 +29,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startTunnel: () => ipcRenderer.invoke('tunnel:start'),
   stopTunnel: () => ipcRenderer.invoke('tunnel:stop'),
   getTunnelStatus: () => ipcRenderer.invoke('tunnel:status'),
-  
+
+  // Update
+  checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  downloadUpdate: () => ipcRenderer.invoke('update:download'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  getUpdateStatus: () => ipcRenderer.invoke('update:status'),
+  onUpdateStatus: (callback: (status: any) => void) => {
+    ipcRenderer.on('update:status', (_, status) => callback(status));
+  },
+  onUpdateAvailable: (callback: (info: any) => void) => {
+    ipcRenderer.on('update:available', (_, info) => callback(info));
+  },
+  onUpdateDownloaded: (callback: (info: any) => void) => {
+    ipcRenderer.on('update:downloaded', (_, info) => callback(info));
+  },
+
   // Onboarding
   completeOnboarding: () => ipcRenderer.invoke('onboarding:complete'),
   isOnboardingComplete: () => ipcRenderer.invoke('onboarding:isComplete'),
@@ -74,6 +89,13 @@ declare global {
       startTunnel: () => Promise<any>;
       stopTunnel: () => Promise<void>;
       getTunnelStatus: () => Promise<any>;
+      checkForUpdates: () => Promise<any>;
+      downloadUpdate: () => Promise<void>;
+      installUpdate: () => Promise<void>;
+      getUpdateStatus: () => Promise<any>;
+      onUpdateStatus: (callback: (status: any) => void) => void;
+      onUpdateAvailable: (callback: (info: any) => void) => void;
+      onUpdateDownloaded: (callback: (info: any) => void) => void;
       completeOnboarding: () => Promise<void>;
       isOnboardingComplete: () => Promise<boolean>;
       resetOnboarding: () => Promise<void>;

@@ -30,6 +30,12 @@ export interface AppConfig {
   // Tunnel
   tunnelAutoStart: boolean;
   lastTunnelUrl: string | null;
+
+  // Auto Update
+  updateEnabled: boolean;
+  updateCheckOnStartup: boolean;
+  updateNotifyOnStartup: boolean;
+  updateAutoDownload: boolean;
 }
 
 const defaults: AppConfig = {
@@ -48,6 +54,10 @@ const defaults: AppConfig = {
   startMinimized: false,
   tunnelAutoStart: false,
   lastTunnelUrl: null,
+  updateEnabled: true,
+  updateCheckOnStartup: true,
+  updateNotifyOnStartup: true,
+  updateAutoDownload: false,
 };
 
 class ConfigManager {

@@ -259,6 +259,44 @@
     .gradient-success { background: var(--success); }
     .gradient-warning { background: var(--warning); }
     .gradient-danger { background: var(--danger); }
+
+    /* Update Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      animation: fadeIn 0.2s ease-out;
+    }
+    .modal-content {
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      max-width: 480px;
+      width: 90%;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      animation: slideUp 0.3s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* Progress bar */
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: var(--bg-tertiary);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
   </style>
 </head>
 <body>
@@ -298,6 +336,8 @@
       Copy: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
       Check: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
       X: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+      Update: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>,
+      Download: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
       Eye: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>,
       Trash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
       Ban: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>,
@@ -1752,6 +1792,163 @@
               </div>
             </div>
           </div>
+
+          {/* Auto Update */}
+          <UpdateSettingsSection showToast={showToast} />
+        </div>
+      );
+    };
+
+    // ============================================
+    // Update Settings Section
+    // ============================================
+    const UpdateSettingsSection = ({ showToast }) => {
+      const [updateConfig, setUpdateConfig] = useState({
+        updateEnabled: true,
+        updateCheckOnStartup: true,
+        updateNotifyOnStartup: true,
+        updateAutoDownload: false,
+      });
+      const [updateStatus, setUpdateStatus] = useState(null);
+      const [checking, setChecking] = useState(false);
+
+      useEffect(() => {
+        if (window.electronAPI) {
+          window.electronAPI.getConfig().then(config => {
+            setUpdateConfig({
+              updateEnabled: config.updateEnabled ?? true,
+              updateCheckOnStartup: config.updateCheckOnStartup ?? true,
+              updateNotifyOnStartup: config.updateNotifyOnStartup ?? true,
+              updateAutoDownload: config.updateAutoDownload ?? false,
+            });
+          });
+          window.electronAPI.getUpdateStatus().then(setUpdateStatus);
+          window.electronAPI.onUpdateStatus(setUpdateStatus);
+        }
+      }, []);
+
+      const handleToggle = async (key) => {
+        const newValue = !updateConfig[key];
+        setUpdateConfig(prev => ({ ...prev, [key]: newValue }));
+        if (window.electronAPI) {
+          await window.electronAPI.setConfig(key, newValue);
+        }
+      };
+
+      const handleCheckUpdate = async () => {
+        if (!window.electronAPI) return;
+        setChecking(true);
+        try {
+          const result = await window.electronAPI.checkForUpdates();
+          setUpdateStatus(result);
+          if (result.available) {
+            showToast('新しいバージョンが見つかりました', 'success');
+          } else {
+            showToast('最新バージョンです', 'info');
+          }
+        } catch (e) {
+          showToast('更新チェックに失敗しました', 'error');
+        } finally {
+          setChecking(false);
+        }
+      };
+
+      if (!window.electronAPI) return null;
+
+      return (
+        <div className="card p-6">
+          <h3 className="font-semibold mb-4 flex items-center gap-2">
+            <Icons.Update />
+            自動アップデート
+          </h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+              <div>
+                <span className="text-[var(--text-secondary)]">現在のバージョン</span>
+              </div>
+              <code className="bg-[var(--bg-tertiary)] px-3 py-1 rounded-lg text-sm">
+                {updateStatus?.currentVersion || '-'}
+              </code>
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+              <div>
+                <p className="font-medium">自動更新を有効にする</p>
+                <p className="text-sm text-[var(--text-muted)]">GitHubから自動的に更新をチェック</p>
+              </div>
+              <button
+                onClick={() => handleToggle('updateEnabled')}
+                className={`toggle-switch ${updateConfig.updateEnabled ? 'active' : ''}`}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+              <div>
+                <p className="font-medium">起動時に更新をチェック</p>
+                <p className="text-sm text-[var(--text-muted)]">アプリ起動時に新しいバージョンを確認</p>
+              </div>
+              <button
+                onClick={() => handleToggle('updateCheckOnStartup')}
+                className={`toggle-switch ${updateConfig.updateCheckOnStartup ? 'active' : ''}`}
+                disabled={!updateConfig.updateEnabled}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+              <div>
+                <p className="font-medium">更新通知を表示</p>
+                <p className="text-sm text-[var(--text-muted)]">新しいバージョンがある場合にダイアログを表示</p>
+              </div>
+              <button
+                onClick={() => handleToggle('updateNotifyOnStartup')}
+                className={`toggle-switch ${updateConfig.updateNotifyOnStartup ? 'active' : ''}`}
+                disabled={!updateConfig.updateEnabled}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+              <div>
+                <p className="font-medium">自動ダウンロード</p>
+                <p className="text-sm text-[var(--text-muted)]">更新を自動的にダウンロード</p>
+              </div>
+              <button
+                onClick={() => handleToggle('updateAutoDownload')}
+                className={`toggle-switch ${updateConfig.updateAutoDownload ? 'active' : ''}`}
+                disabled={!updateConfig.updateEnabled}
+              />
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={handleCheckUpdate}
+                disabled={checking || !updateConfig.updateEnabled}
+                className="btn-primary px-4 py-2 flex items-center gap-2"
+              >
+                {checking ? <Spinner size="sm" /> : <Icons.Refresh />}
+                {checking ? 'チェック中...' : '今すぐ更新を確認'}
+              </button>
+              {updateStatus?.available && (
+                <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-green-700 text-sm">
+                    新しいバージョン {updateStatus.updateInfo?.version} が利用可能です
+                  </p>
+                </div>
+              )}
+              {updateStatus?.downloaded && (
+                <div className="mt-3 bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-center justify-between">
+                  <p className="text-indigo-700 text-sm">
+                    更新がダウンロード済みです。再起動後に適用されます。
+                  </p>
+                  <button
+                    onClick={() => window.electronAPI.installUpdate()}
+                    className="btn-success px-3 py-1 text-sm"
+                  >
+                    今すぐ再起動
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       );
     };
@@ -1838,6 +2035,97 @@
     };
 
     // ============================================
+    // Update Dialog
+    // ============================================
+    const UpdateDialog = ({ updateInfo, updateStatus, onDownload, onInstall, onClose }) => {
+      const formatBytes = (bytes) => {
+        if (!bytes) return '';
+        const mb = bytes / (1024 * 1024);
+        return `${mb.toFixed(1)} MB`;
+      };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center">
+                  <Icons.Update />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">アップデートが利用可能</h3>
+                  <p className="text-sm text-[var(--text-muted)]">新しいバージョンがあります</p>
+                </div>
+              </div>
+
+              <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[var(--text-secondary)]">現在のバージョン</span>
+                  <code className="bg-[var(--bg-secondary)] px-2 py-1 rounded text-sm">{updateStatus?.currentVersion}</code>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[var(--text-secondary)]">新しいバージョン</span>
+                  <code className="bg-green-100 text-green-700 px-2 py-1 rounded text-sm">{updateInfo?.version}</code>
+                </div>
+              </div>
+
+              {updateInfo?.releaseNotes && (
+                <div className="mb-4">
+                  <h4 className="font-medium mb-2">リリースノート</h4>
+                  <div className="bg-[var(--bg-tertiary)] rounded-lg p-3 text-sm text-[var(--text-secondary)] max-h-32 overflow-y-auto scrollbar-thin">
+                    {updateInfo.releaseNotes}
+                  </div>
+                </div>
+              )}
+
+              {updateStatus?.downloading && (
+                <div className="mb-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>ダウンロード中...</span>
+                    <span>{updateStatus.progress?.percent?.toFixed(0) || 0}%</span>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-bar-fill" style={{ width: `${updateStatus.progress?.percent || 0}%` }} />
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
+                    {formatBytes(updateStatus.progress?.transferred)} / {formatBytes(updateStatus.progress?.total)}
+                  </p>
+                </div>
+              )}
+
+              {updateStatus?.error && (
+                <div className="bg-red-50 text-red-600 rounded-lg p-3 mb-4 text-sm">
+                  エラー: {updateStatus.error}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                {updateStatus?.downloaded ? (
+                  <button onClick={onInstall} className="flex-1 btn-success py-3 flex items-center justify-center gap-2">
+                    再起動して更新
+                  </button>
+                ) : updateStatus?.downloading ? (
+                  <button disabled className="flex-1 btn-primary py-3 opacity-50 cursor-not-allowed flex items-center justify-center gap-2">
+                    <Spinner size="sm" />
+                    ダウンロード中...
+                  </button>
+                ) : (
+                  <button onClick={onDownload} className="flex-1 btn-primary py-3 flex items-center justify-center gap-2">
+                    <Icons.Download />
+                    ダウンロード
+                  </button>
+                )}
+                <button onClick={onClose} className="btn-secondary py-3 px-6">
+                  後で
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ============================================
     // Main Layout
     // ============================================
     const MainLayout = ({ serverUrl, masterKey, onLogout }) => {
@@ -1845,10 +2133,45 @@
       const [toast, setToast] = useState(null);
       const [sidebarOpen, setSidebarOpen] = useState(true);
       const [notifications, setNotifications] = useState([]);
+      const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+      const [updateStatus, setUpdateStatus] = useState(null);
+      const [updateInfo, setUpdateInfo] = useState(null);
       const { dark, toggle } = useTheme();
-      
+
       const api = useMemo(() => createApi(serverUrl, masterKey), [serverUrl, masterKey]);
       const showToast = useCallback((msg, type = 'info') => setToast({ message: msg, type }), []);
+
+      // Listen for update events from Electron
+      useEffect(() => {
+        if (window.electronAPI) {
+          window.electronAPI.onUpdateAvailable((info) => {
+            setUpdateInfo(info);
+            setShowUpdateDialog(true);
+          });
+          window.electronAPI.onUpdateStatus((status) => {
+            setUpdateStatus(status);
+          });
+          window.electronAPI.onUpdateDownloaded((info) => {
+            setUpdateInfo(info);
+            showToast('アップデートのダウンロードが完了しました', 'success');
+          });
+
+          // Get initial update status
+          window.electronAPI.getUpdateStatus().then(setUpdateStatus);
+        }
+      }, [showToast]);
+
+      const handleDownloadUpdate = async () => {
+        try {
+          await window.electronAPI.downloadUpdate();
+        } catch (e) {
+          showToast('ダウンロードに失敗しました', 'error');
+        }
+      };
+
+      const handleInstallUpdate = () => {
+        window.electronAPI.installUpdate();
+      };
 
       // Simulate notifications
       useEffect(() => {
@@ -1940,6 +2263,17 @@
 
           {/* Toast */}
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+          {/* Update Dialog */}
+          {showUpdateDialog && (
+            <UpdateDialog
+              updateInfo={updateInfo}
+              updateStatus={updateStatus}
+              onDownload={handleDownloadUpdate}
+              onInstall={handleInstallUpdate}
+              onClose={() => setShowUpdateDialog(false)}
+            />
+          )}
 
           {/* Mobile overlay */}
           {sidebarOpen && <div className="md:hidden fixed inset-0 bg-black/50 z-30" onClick={() => setSidebarOpen(false)} />}

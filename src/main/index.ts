@@ -7,6 +7,7 @@ import { claudeManager } from './claude';
 import { tunnelManager } from './tunnel';
 import { startServer, stopServer, getServerStatus } from './server';
 import { createTray, destroyTray } from './tray';
+import { updateManager } from './updater';
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -74,7 +75,10 @@ function createWindow() {
   if (isOnboardingComplete) {
     createTray(mainWindow, quitApp);
   }
-  
+
+  // Set main window for updater
+  updateManager.setMainWindow(mainWindow);
+
   return mainWindow;
 }
 
@@ -370,6 +374,20 @@ ipcMain.handle('tunnel:stop', () => {
 });
 ipcMain.handle('tunnel:status', () => tunnelManager.getStatus());
 
+// Update
+ipcMain.handle('update:check', async () => {
+  return await updateManager.checkForUpdates();
+});
+ipcMain.handle('update:download', async () => {
+  await updateManager.downloadUpdate();
+});
+ipcMain.handle('update:install', () => {
+  updateManager.installUpdate();
+});
+ipcMain.handle('update:status', () => {
+  return updateManager.getStatus();
+});
+
 // Onboarding
 ipcMain.handle('onboarding:complete', () => {
   configManager.completeOnboarding();
@@ -441,6 +459,9 @@ app.whenReady().then(async () => {
     } catch (error) {
       console.error('Failed to auto-start server:', error);
     }
+
+    // Check for updates on startup
+    updateManager.checkOnStartup();
   }
   
   app.on('activate', () => {
