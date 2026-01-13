@@ -36,7 +36,8 @@ OpenAI API互換サーバーのデスクトップアプリケーション版で�
 ### macOS
 1. `CodexAPIServer.dmg` をダウンロード
 2. アプリケーションフォルダにドラッグ
-3. Launchpadから起動
+3. ターミナルから"xattr -cr "/Applications/Codex API Server.app"で権限付与
+4. Launchpadから起動
 
 ### Linux
 1. `CodexAPIServer.AppImage` をダウンロード
