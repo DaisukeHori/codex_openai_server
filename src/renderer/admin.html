@@ -515,75 +515,112 @@
       const [responses, setResponses] = useState([]);
       const [usageData, setUsageData] = useState([]);
       const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
 
       const load = useCallback(async () => {
+        setError(null);
         try {
-          const [h, s, p, r] = await Promise.all([
-            api.health(), api.getStats().catch(() => null), api.processStatus().catch(() => null), api.listResponses(20).catch(() => ({ data: [] }))
+          const h = await api.health();
+          setHealth(h);
+
+          // These require auth - handle failures gracefully
+          const [s, p, r] = await Promise.all([
+            api.getStats().catch(e => { console.log('Stats error:', e); return null; }),
+            api.processStatus().catch(e => { console.log('Process error:', e); return null; }),
+            api.listResponses(20).catch(e => { console.log('Responses error:', e); return { data: [] }; })
           ]);
-          setHealth(h); setStats(s); setProcesses(p); setResponses(r.data || []);
-          
-          // Generate mock usage data for last 7 days
-          const mockUsage = [];
+          setStats(s);
+          setProcesses(p);
+          setResponses(r?.data || []);
+
+          // Generate usage data from responses (real data, not mock)
+          const usageByDate = {};
+          (r?.data || []).forEach(resp => {
+            if (resp.created_at) {
+              const date = new Date(resp.created_at * 1000).toISOString().split('T')[0];
+              usageByDate[date] = (usageByDate[date] || 0) + 1;
+            }
+          });
+
+          // Fill in last 7 days
+          const usage = [];
           for (let i = 6; i >= 0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
-            mockUsage.push({
-              date: d.toISOString().split('T')[0],
-              request_count: Math.floor(Math.random() * 100) + 20,
+            const dateStr = d.toISOString().split('T')[0];
+            usage.push({
+              date: dateStr,
+              request_count: usageByDate[dateStr] || 0,
             });
           }
-          setUsageData(mockUsage);
-        } catch (e) { showToast('読み込み失敗', 'error'); }
+          setUsageData(usage);
+        } catch (e) {
+          console.error('Dashboard load error:', e);
+          setError('データの読み込みに失敗しました');
+        }
         finally { setLoading(false); }
       }, [api]);
 
-      useEffect(() => { load(); const i = setInterval(load, 15000); return () => clearInterval(i); }, [load]);
+      useEffect(() => { load(); const i = setInterval(load, 30000); return () => clearInterval(i); }, [load]);
 
       if (loading) return <div className="flex items-center justify-center h-64"><Spinner size="lg" /></div>;
 
+      // Helper to render CLI status
+      const renderCliStatus = (name, info) => {
+        if (!info?.installed) return <span className="text-[var(--danger)]">✗ {name} 未インストール</span>;
+        if (!info?.authenticated) return <span className="text-[var(--warning)]">△ {name} 未認証</span>;
+        return <span className="text-[var(--success)]">✓ {name}</span>;
+      };
+
       return (
         <div className="space-y-6 animate-fade-in">
+          {error && (
+            <div className="card p-4 border-[var(--danger)] bg-[#fef2f2]">
+              <p className="text-sm text-[var(--danger)]">{error}</p>
+            </div>
+          )}
+
           {/* Server Status */}
           <div className="card p-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-4">
-                <span className={`status-dot ${health?.status === 'ok' ? 'status-online' : 'status-offline'} animate-pulse-slow`} />
+                <span className={`status-dot ${health?.status === 'ok' ? 'status-online' : 'status-offline'}`} />
                 <div>
-                  <h3 className="font-semibold">サーバー状態</h3>
-                  <p className="text-sm text-[var(--text-muted)]">
-                    {health?.codex?.authenticated ? '✓ Codex' : '✗ Codex'} •
-                    {health?.claude?.authenticated ? '✓ Claude' : '✗ Claude'}
+                  <h3 className="font-semibold text-sm">サーバー状態</h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
+                    {renderCliStatus('Codex', health?.codex)} • {renderCliStatus('Claude', health?.claude)}
                   </p>
                 </div>
               </div>
-              <button onClick={load} className="btn-secondary flex items-center gap-2"><Icons.Refresh />更新</button>
+              <button onClick={load} className="btn btn-secondary flex items-center gap-2 text-xs"><Icons.Refresh />更新</button>
             </div>
           </div>
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard icon={<Icons.Key />} label="APIキー数" value={formatNum(stats?.total_keys)} sub={`${stats?.active_keys || 0} 有効`} color="indigo" />
-            <StatCard icon={<Icons.Activity />} label="本日のリクエスト" value={formatNum(stats?.total_requests_today)} color="green" trend={12} />
-            <StatCard icon={<Icons.Server />} label="アクティブプロセス" value={formatNum(processes?.active)} sub={`${processes?.queued || 0} 待機中`} color="orange" />
-            <StatCard icon={<Icons.History />} label="総レスポンス数" value={formatNum(health?.storage?.totalResponses)} color="blue" />
+            <StatCard icon={<Icons.Key />} label="APIキー数" value={formatNum(stats?.total_keys || 0)} sub={`${stats?.active_keys || 0} 有効`} color="gray" />
+            <StatCard icon={<Icons.Activity />} label="本日のリクエスト" value={formatNum(stats?.total_requests_today || 0)} color="gray" />
+            <StatCard icon={<Icons.Server />} label="アクティブプロセス" value={formatNum(processes?.active || 0)} sub={`${processes?.queued || 0} 待機中`} color="gray" />
+            <StatCard icon={<Icons.History />} label="総レスポンス数" value={formatNum(health?.storage?.totalResponses || 0)} color="gray" />
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="card p-6">
-              <h3 className="font-semibold mb-4">週間リクエスト数</h3>
-              <div className="h-64">
-                <UsageChart data={usageData} type="bar" />
+          {/* Charts - only show if there's data */}
+          {usageData.some(d => d.request_count > 0) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="card p-6">
+                <h3 className="font-semibold text-sm mb-4">週間リクエスト数</h3>
+                <div className="h-48">
+                  <UsageChart data={usageData} type="bar" />
+                </div>
+              </div>
+              <div className="card p-6">
+                <h3 className="font-semibold text-sm mb-4">リクエスト推移</h3>
+                <div className="h-48">
+                  <UsageChart data={usageData} type="line" />
+                </div>
               </div>
             </div>
-            <div className="card p-6">
-              <h3 className="font-semibold mb-4">リクエスト推移</h3>
-              <div className="h-64">
-                <UsageChart data={usageData} type="line" />
-              </div>
-            </div>
-          </div>
+          )}
 
           {/* Recent Activity */}
           <div className="card">
@@ -1057,10 +1094,61 @@
     const PlaygroundPage = ({ api, showToast }) => {
       const [mode, setMode] = useState('responses'); // 'responses' or 'chat'
       const [input, setInput] = useState('');
-      const [model, setModel] = useState('gpt-5.2-codex');
+      const [model, setModel] = useState('');
       const [result, setResult] = useState(null);
       const [loading, setLoading] = useState(false);
       const [history, setHistory] = useState([]);
+      const [availableModels, setAvailableModels] = useState([]);
+      const [modelsLoading, setModelsLoading] = useState(true);
+
+      // Load available models based on authenticated providers
+      useEffect(() => {
+        const loadModels = async () => {
+          try {
+            const health = await api.health();
+            const models = [];
+
+            // Add Codex models if authenticated
+            if (health.codex?.authenticated) {
+              const codexModels = [
+                { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', provider: 'codex' },
+                { id: 'gpt-5.1-codex', name: 'GPT-5.1 Codex', provider: 'codex' },
+                { id: 'gpt-5.2', name: 'GPT-5.2', provider: 'codex' },
+                { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'codex' },
+                { id: 'o3-mini', name: 'O3 Mini', provider: 'codex' },
+                { id: 'o4-mini', name: 'O4 Mini', provider: 'codex' },
+              ];
+              models.push(...codexModels);
+            }
+
+            // Add Claude models if authenticated
+            if (health.claude?.authenticated) {
+              const claudeModels = [
+                { id: 'claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'claude' },
+                { id: 'claude-opus-4', name: 'Claude Opus 4', provider: 'claude' },
+                { id: 'claude-haiku', name: 'Claude Haiku', provider: 'claude' },
+              ];
+              models.push(...claudeModels);
+            }
+
+            setAvailableModels(models);
+            // Set default model to first available
+            if (models.length > 0 && !model) {
+              setModel(models[0].id);
+            }
+          } catch (e) {
+            console.error('Failed to load models:', e);
+            // Fallback: show all models if health check fails
+            setAvailableModels([
+              { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', provider: 'codex' },
+              { id: 'claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'claude' },
+            ]);
+          } finally {
+            setModelsLoading(false);
+          }
+        };
+        loadModels();
+      }, []);
 
       const run = async () => {
         if (!input.trim()) return;
@@ -1101,11 +1189,21 @@
 
               <div>
                 <label className="block text-sm font-medium mb-2">モデル</label>
-                <select value={model} onChange={e => setModel(e.target.value)} className="input-field">
-                  <option value="gpt-5.2-codex">gpt-5.2-codex</option>
-                  <option value="o3-mini">o3-mini</option>
-                  <option value="o1-pro">o1-pro</option>
-                </select>
+                {modelsLoading ? (
+                  <div className="input-field flex items-center gap-2 text-[var(--text-muted)]">
+                    <Spinner size="sm" />読み込み中...
+                  </div>
+                ) : availableModels.length === 0 ? (
+                  <div className="input-field text-[var(--text-muted)]">
+                    利用可能なモデルがありません（CLI認証が必要です）
+                  </div>
+                ) : (
+                  <select value={model} onChange={e => setModel(e.target.value)} className="input-field">
+                    {availableModels.map(m => (
+                      <option key={m.id} value={m.id}>{m.name} ({m.provider})</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
@@ -1182,34 +1280,17 @@
       const [autoScroll, setAutoScroll] = useState(true);
       const logsEndRef = useRef(null);
 
-      // Simulate logs (in real implementation, this would be WebSocket)
+      // Real-time logs will be implemented with WebSocket in future
+      // For now, show empty state
       useEffect(() => {
-        const types = ['info', 'success', 'warning', 'error'];
-        const messages = [
-          'API request received from client',
-          'Response generated successfully',
-          'Rate limit warning for key xxx',
-          'Authentication failed for invalid key',
-          'Background job completed',
-          'New API key created',
-          'Connection established',
-        ];
-        
-        const addLog = () => {
-          const type = types[Math.floor(Math.random() * types.length)];
-          const message = messages[Math.floor(Math.random() * messages.length)];
-          setLogs(l => [...l.slice(-99), { id: Date.now(), time: new Date(), type, message }]);
-        };
-
-        // Add initial logs
-        for (let i = 0; i < 10; i++) addLog();
-
-        const interval = setInterval(addLog, 3000);
-        return () => clearInterval(interval);
+        // TODO: Connect to WebSocket for real-time logs
+        // Example: const ws = new WebSocket(`ws://${serverUrl}/logs`);
+        // ws.onmessage = (event) => { const log = JSON.parse(event.data); setLogs(l => [...l.slice(-99), log]); };
+        // return () => ws.close();
       }, []);
 
       useEffect(() => {
-        if (autoScroll) logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (autoScroll && logs.length > 0) logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, [logs, autoScroll]);
 
       const filtered = filter === 'all' ? logs : logs.filter(l => l.type === filter);
@@ -1245,13 +1326,22 @@
 
           <div className="card">
             <div className="h-96 overflow-y-auto scrollbar-thin p-4 bg-gray-900 rounded-xl mono text-sm">
-              {filtered.map(log => (
-                <div key={log.id} className={`log-line log-${log.type}`}>
-                  <span className="text-gray-500">[{log.time.toLocaleTimeString()}]</span>
-                  <span className={`ml-2 ${log.type === 'error' ? 'text-red-400' : log.type === 'warning' ? 'text-yellow-400' : log.type === 'success' ? 'text-green-400' : 'text-blue-400'}`}>[{log.type.toUpperCase()}]</span>
-                  <span className="ml-2 text-gray-300">{log.message}</span>
+              {filtered.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-gray-500">
+                  <div className="text-center">
+                    <p>ログはありません</p>
+                    <p className="text-xs mt-2">APIリクエストがあるとここにログが表示されます</p>
+                  </div>
                 </div>
-              ))}
+              ) : (
+                filtered.map(log => (
+                  <div key={log.id} className={`log-line log-${log.type}`}>
+                    <span className="text-gray-500">[{log.time.toLocaleTimeString()}]</span>
+                    <span className={`ml-2 ${log.type === 'error' ? 'text-red-400' : log.type === 'warning' ? 'text-yellow-400' : log.type === 'success' ? 'text-green-400' : 'text-blue-400'}`}>[{log.type.toUpperCase()}]</span>
+                    <span className="ml-2 text-gray-300">{log.message}</span>
+                  </div>
+                ))
+              )}
               <div ref={logsEndRef} />
             </div>
           </div>

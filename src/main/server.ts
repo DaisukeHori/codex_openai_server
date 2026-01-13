@@ -148,9 +148,151 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
     }
     
     // ========================================
+    // API Documentation
+    // ========================================
+
+    const openApiSpec = {
+      openapi: '3.0.3',
+      info: {
+        title: 'Codex API Server',
+        description: 'OpenAI-compatible API that wraps Codex CLI and Claude Code',
+        version: '1.0.0',
+      },
+      servers: [{ url: `http://localhost:${port}` }],
+      paths: {
+        '/health': {
+          get: {
+            summary: 'Health check',
+            tags: ['System'],
+            responses: { '200': { description: 'Server status and CLI information' } }
+          }
+        },
+        '/v1/models': {
+          get: {
+            summary: 'List available models',
+            tags: ['Models'],
+            responses: { '200': { description: 'List of available models' } }
+          }
+        },
+        '/v1/responses': {
+          post: {
+            summary: 'Create a response',
+            tags: ['Responses'],
+            security: [{ BearerAuth: [] }],
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['input'],
+                    properties: {
+                      model: { type: 'string', example: 'gpt-5.2-codex' },
+                      input: { type: 'string', example: 'Hello, how are you?' },
+                      instructions: { type: 'string' },
+                      previous_response_id: { type: 'string' },
+                      stream: { type: 'boolean' }
+                    }
+                  }
+                }
+              }
+            },
+            responses: { '200': { description: 'Response created' } }
+          },
+          get: {
+            summary: 'List responses',
+            tags: ['Responses'],
+            security: [{ BearerAuth: [] }],
+            parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } }],
+            responses: { '200': { description: 'List of responses' } }
+          }
+        },
+        '/v1/chat/completions': {
+          post: {
+            summary: 'Create chat completion',
+            tags: ['Chat'],
+            security: [{ BearerAuth: [] }],
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['messages'],
+                    properties: {
+                      model: { type: 'string', example: 'gpt-5.2-codex' },
+                      messages: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            role: { type: 'string', enum: ['system', 'user', 'assistant'] },
+                            content: { type: 'string' }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            responses: { '200': { description: 'Chat completion created' } }
+          }
+        },
+        '/v1/api-keys': {
+          post: {
+            summary: 'Create API key',
+            tags: ['API Keys'],
+            security: [{ BearerAuth: [] }],
+            responses: { '200': { description: 'API key created' } }
+          },
+          get: {
+            summary: 'List API keys',
+            tags: ['API Keys'],
+            security: [{ BearerAuth: [] }],
+            responses: { '200': { description: 'List of API keys' } }
+          }
+        }
+      },
+      components: {
+        securitySchemes: {
+          BearerAuth: { type: 'http', scheme: 'bearer' }
+        }
+      }
+    };
+
+    app.get('/openapi.json', (req, res) => {
+      res.json(openApiSpec);
+    });
+
+    app.get('/docs', (req, res) => {
+      res.send(`<!DOCTYPE html>
+<html>
+<head>
+  <title>Codex API Server - Docs</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = function() {
+      SwaggerUIBundle({
+        url: '/openapi.json',
+        dom_id: '#swagger-ui',
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+        layout: "BaseLayout"
+      });
+    };
+  </script>
+</body>
+</html>`);
+    });
+
+    // ========================================
     // Health & Status
     // ========================================
-    
+
     app.get('/health', async (req, res) => {
       const codexStatus = await codexManager.getStatus();
       const claudeStatus = await claudeManager.getStatus();
