@@ -50,15 +50,16 @@ export class ClaudeManager {
 
   private findClaudePath(): void {
     const possiblePaths = [
-      'claude',
       '/usr/local/bin/claude',
       '/usr/bin/claude',
       '/opt/node22/bin/claude',
       path.join(process.env.APPDATA || '', 'npm', 'claude.cmd'),
       path.join(process.env.LOCALAPPDATA || '', 'npm', 'claude.cmd'),
       path.join(os.homedir(), '.npm-global', 'bin', 'claude'),
+      path.join(os.homedir(), '.nvm', 'versions', 'node', 'v22.0.0', 'bin', 'claude'),
     ];
 
+    // First check hardcoded paths
     for (const p of possiblePaths) {
       try {
         if (fs.existsSync(p)) {
@@ -69,9 +70,71 @@ export class ClaudeManager {
         // Continue checking
       }
     }
+
+    // If not found, try to find via 'which' command using login shell
+    // This is done asynchronously after construction
+    this.findClaudePathAsync();
+  }
+
+  private async findClaudePathAsync(): Promise<void> {
+    const platform = process.platform;
+
+    try {
+      let whichPath: string | null = null;
+
+      if (platform === 'darwin') {
+        // Use login shell to get full PATH on macOS
+        whichPath = await this.runWhichCommand('/bin/zsh', ['-l', '-c', 'which claude']);
+      } else if (platform === 'win32') {
+        whichPath = await this.runWhichCommand('where', ['claude']);
+      } else {
+        // Linux
+        whichPath = await this.runWhichCommand('/bin/bash', ['-l', '-c', 'which claude']);
+      }
+
+      if (whichPath) {
+        this.claudePath = whichPath.trim();
+      }
+    } catch (e) {
+      // Could not find claude via which
+    }
+  }
+
+  private runWhichCommand(cmd: string, args: string[]): Promise<string | null> {
+    return new Promise((resolve) => {
+      const proc = spawn(cmd, args, { env: { ...process.env } });
+      let output = '';
+
+      proc.stdout?.on('data', (data) => {
+        output += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0 && output.trim()) {
+          resolve(output.trim().split('\n')[0]); // Get first line
+        } else {
+          resolve(null);
+        }
+      });
+
+      proc.on('error', () => {
+        resolve(null);
+      });
+
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        proc.kill();
+        resolve(null);
+      }, 5000);
+    });
   }
 
   async isInstalled(): Promise<boolean> {
+    // Ensure async path finding is complete first
+    if (this.claudePath === 'claude') {
+      await this.findClaudePathAsync();
+    }
+
     try {
       await this.runRawCommand(['--version']);
       return true;
@@ -81,6 +144,11 @@ export class ClaudeManager {
   }
 
   async getVersion(): Promise<string | null> {
+    // Ensure async path finding is complete first
+    if (this.claudePath === 'claude') {
+      await this.findClaudePathAsync();
+    }
+
     try {
       const output = await this.runRawCommand(['--version']);
       const match = output.match(/(\d+\.\d+\.\d+)/);

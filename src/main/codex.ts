@@ -2,6 +2,7 @@ import { spawn, ChildProcess, SpawnOptions } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 
 export interface CodexStatus {
   installed: boolean;
@@ -28,13 +29,16 @@ class CodexManager {
   
   private findCodexPath(): void {
     const possiblePaths = [
-      'codex',
-      path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'),
-      path.join(process.env.LOCALAPPDATA || '', 'npm', 'codex.cmd'),
       '/usr/local/bin/codex',
       '/usr/bin/codex',
+      '/opt/node22/bin/codex',
+      path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'),
+      path.join(process.env.LOCALAPPDATA || '', 'npm', 'codex.cmd'),
+      path.join(os.homedir(), '.npm-global', 'bin', 'codex'),
+      path.join(os.homedir(), '.nvm', 'versions', 'node', 'v22.0.0', 'bin', 'codex'),
     ];
-    
+
+    // First check hardcoded paths
     for (const p of possiblePaths) {
       try {
         if (fs.existsSync(p)) {
@@ -45,9 +49,67 @@ class CodexManager {
         // Continue checking
       }
     }
+
+    // If not found, try to find via 'which' command using login shell
+    this.findCodexPathAsync();
   }
-  
+
+  private async findCodexPathAsync(): Promise<void> {
+    const platform = process.platform;
+
+    try {
+      let whichPath: string | null = null;
+
+      if (platform === 'darwin') {
+        whichPath = await this.runWhichCommand('/bin/zsh', ['-l', '-c', 'which codex']);
+      } else if (platform === 'win32') {
+        whichPath = await this.runWhichCommand('where', ['codex']);
+      } else {
+        whichPath = await this.runWhichCommand('/bin/bash', ['-l', '-c', 'which codex']);
+      }
+
+      if (whichPath) {
+        this.codexPath = whichPath.trim();
+      }
+    } catch (e) {
+      // Could not find codex via which
+    }
+  }
+
+  private runWhichCommand(cmd: string, args: string[]): Promise<string | null> {
+    return new Promise((resolve) => {
+      const proc = spawn(cmd, args, { env: { ...process.env } });
+      let output = '';
+
+      proc.stdout?.on('data', (data) => {
+        output += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0 && output.trim()) {
+          resolve(output.trim().split('\n')[0]);
+        } else {
+          resolve(null);
+        }
+      });
+
+      proc.on('error', () => {
+        resolve(null);
+      });
+
+      setTimeout(() => {
+        proc.kill();
+        resolve(null);
+      }, 5000);
+    });
+  }
+
   async isInstalled(): Promise<boolean> {
+    // Ensure async path finding is complete first
+    if (this.codexPath === 'codex') {
+      await this.findCodexPathAsync();
+    }
+
     try {
       await this.runCommand(['--version']);
       return true;
@@ -55,8 +117,13 @@ class CodexManager {
       return false;
     }
   }
-  
+
   async getVersion(): Promise<string | null> {
+    // Ensure async path finding is complete first
+    if (this.codexPath === 'codex') {
+      await this.findCodexPathAsync();
+    }
+
     try {
       const output = await this.runCommand(['--version']);
       const match = output.match(/(\d+\.\d+\.\d+)/);
@@ -153,12 +220,28 @@ class CodexManager {
     return new Promise((resolve, reject) => {
       let output = '';
       let errorOutput = '';
-      
-      const proc = spawn(this.codexPath, args, {
-        shell: true,
-        env: { ...process.env },
-      });
-      
+
+      // Use login shell on macOS/Linux to get proper PATH
+      const platform = process.platform;
+      let proc;
+
+      if (platform === 'darwin') {
+        const command = `${this.codexPath} ${args.join(' ')}`;
+        proc = spawn('/bin/zsh', ['-l', '-c', command], {
+          env: { ...process.env },
+        });
+      } else if (platform === 'win32') {
+        proc = spawn(this.codexPath, args, {
+          shell: true,
+          env: { ...process.env },
+        });
+      } else {
+        const command = `${this.codexPath} ${args.join(' ')}`;
+        proc = spawn('/bin/bash', ['-l', '-c', command], {
+          env: { ...process.env },
+        });
+      }
+
       const timer = setTimeout(() => {
         proc.kill();
         reject(new Error('Command timeout'));
