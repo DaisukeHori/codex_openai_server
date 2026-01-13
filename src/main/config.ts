@@ -84,7 +84,11 @@ class ConfigManager {
   completeOnboarding(): void {
     this.set('onboardingCompleted', true);
   }
-  
+
+  resetOnboarding(): void {
+    this.set('onboardingCompleted', false);
+  }
+
   getServerConfig() {
     return {
       port: this.get('port'),

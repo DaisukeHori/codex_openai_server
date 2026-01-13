@@ -1468,11 +1468,40 @@
     // Login Page
     // ============================================
     const LoginPage = ({ onLogin }) => {
-      const [serverUrl, setServerUrl] = useState(window.location.origin);
+      const [serverUrl, setServerUrl] = useState('');
       const [masterKey, setMasterKey] = useState('');
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
+      const [autoLogging, setAutoLogging] = useState(true);
       const { dark, toggle } = useTheme();
+
+      // Auto-fill from Electron config
+      useEffect(() => {
+        const loadConfig = async () => {
+          try {
+            if (window.electronAPI) {
+              const url = await window.electronAPI.getServerUrl();
+              const key = await window.electronAPI.getMasterKey();
+              setServerUrl(url || 'http://localhost:8080');
+              setMasterKey(key || '');
+
+              // Auto-login for local access
+              if (url && key) {
+                const api = createApi(url, key);
+                await api.health();
+                onLogin(url, key);
+                return;
+              }
+            } else {
+              setServerUrl(window.location.origin !== 'file://' ? window.location.origin : 'http://localhost:8080');
+            }
+          } catch (err) {
+            // Failed to auto-login, show login form
+          }
+          setAutoLogging(false);
+        };
+        loadConfig();
+      }, [onLogin]);
 
       const submit = async (e) => {
         e.preventDefault(); setError(''); setLoading(true);
@@ -1480,6 +1509,17 @@
         catch (err) { setError('接続に失敗しました。URLとキーを確認してください。'); }
         finally { setLoading(false); }
       };
+
+      if (autoLogging) {
+        return (
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <Spinner size="lg" />
+              <p className="mt-4 text-[var(--text-muted)]">接続中...</p>
+            </div>
+          </div>
+        );
+      }
 
       return (
         <div className="min-h-screen flex items-center justify-center p-4">
