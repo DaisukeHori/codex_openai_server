@@ -2,6 +2,7 @@ import { spawn, ChildProcess, SpawnOptions } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 
 export interface CodexStatus {
   installed: boolean;
@@ -28,13 +29,16 @@ class CodexManager {
   
   private findCodexPath(): void {
     const possiblePaths = [
-      'codex',
-      path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'),
-      path.join(process.env.LOCALAPPDATA || '', 'npm', 'codex.cmd'),
       '/usr/local/bin/codex',
       '/usr/bin/codex',
+      '/opt/node22/bin/codex',
+      path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'),
+      path.join(process.env.LOCALAPPDATA || '', 'npm', 'codex.cmd'),
+      path.join(os.homedir(), '.npm-global', 'bin', 'codex'),
+      path.join(os.homedir(), '.nvm', 'versions', 'node', 'v22.0.0', 'bin', 'codex'),
     ];
-    
+
+    // First check hardcoded paths
     for (const p of possiblePaths) {
       try {
         if (fs.existsSync(p)) {
@@ -45,9 +49,67 @@ class CodexManager {
         // Continue checking
       }
     }
+
+    // If not found, try to find via 'which' command using login shell
+    this.findCodexPathAsync();
   }
-  
+
+  private async findCodexPathAsync(): Promise<void> {
+    const platform = process.platform;
+
+    try {
+      let whichPath: string | null = null;
+
+      if (platform === 'darwin') {
+        whichPath = await this.runWhichCommand('/bin/zsh', ['-l', '-c', 'which codex']);
+      } else if (platform === 'win32') {
+        whichPath = await this.runWhichCommand('where', ['codex']);
+      } else {
+        whichPath = await this.runWhichCommand('/bin/bash', ['-l', '-c', 'which codex']);
+      }
+
+      if (whichPath) {
+        this.codexPath = whichPath.trim();
+      }
+    } catch (e) {
+      // Could not find codex via which
+    }
+  }
+
+  private runWhichCommand(cmd: string, args: string[]): Promise<string | null> {
+    return new Promise((resolve) => {
+      const proc = spawn(cmd, args, { env: { ...process.env } });
+      let output = '';
+
+      proc.stdout?.on('data', (data) => {
+        output += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0 && output.trim()) {
+          resolve(output.trim().split('\n')[0]);
+        } else {
+          resolve(null);
+        }
+      });
+
+      proc.on('error', () => {
+        resolve(null);
+      });
+
+      setTimeout(() => {
+        proc.kill();
+        resolve(null);
+      }, 5000);
+    });
+  }
+
   async isInstalled(): Promise<boolean> {
+    // Ensure async path finding is complete first
+    if (this.codexPath === 'codex') {
+      await this.findCodexPathAsync();
+    }
+
     try {
       await this.runCommand(['--version']);
       return true;
@@ -55,8 +117,13 @@ class CodexManager {
       return false;
     }
   }
-  
+
   async getVersion(): Promise<string | null> {
+    // Ensure async path finding is complete first
+    if (this.codexPath === 'codex') {
+      await this.findCodexPathAsync();
+    }
+
     try {
       const output = await this.runCommand(['--version']);
       const match = output.match(/(\d+\.\d+\.\d+)/);
@@ -153,12 +220,28 @@ class CodexManager {
     return new Promise((resolve, reject) => {
       let output = '';
       let errorOutput = '';
-      
-      const proc = spawn(this.codexPath, args, {
-        shell: true,
-        env: { ...process.env },
-      });
-      
+
+      // Use login shell on macOS/Linux to get proper PATH
+      const platform = process.platform;
+      let proc;
+
+      if (platform === 'darwin') {
+        const command = `${this.codexPath} ${args.join(' ')}`;
+        proc = spawn('/bin/zsh', ['-l', '-c', command], {
+          env: { ...process.env },
+        });
+      } else if (platform === 'win32') {
+        proc = spawn(this.codexPath, args, {
+          shell: true,
+          env: { ...process.env },
+        });
+      } else {
+        const command = `${this.codexPath} ${args.join(' ')}`;
+        proc = spawn('/bin/bash', ['-l', '-c', command], {
+          env: { ...process.env },
+        });
+      }
+
       const timer = setTimeout(() => {
         proc.kill();
         reject(new Error('Command timeout'));
@@ -268,58 +351,108 @@ class CodexManager {
   // Install Codex CLI via npm
   async install(
     onProgress: (message: string) => void
-  ): Promise<{ success: boolean; message: string }> {
-    return new Promise((resolve) => {
-      onProgress('npm install -g @openai/codex を実行中...');
+  ): Promise<{ success: boolean; message: string; needsManualInstall?: boolean }> {
+    const platform = process.platform;
 
-      // Use login shell on macOS/Linux to get proper PATH
-      const platform = process.platform;
-      let proc;
-      if (platform === 'darwin') {
-        proc = spawn('/bin/zsh', ['-l', '-c', 'npm install -g @openai/codex'], {
-          env: { ...process.env },
+    if (platform === 'darwin') {
+      // macOS: Open Terminal to install with sudo if needed
+      return new Promise((resolve) => {
+        onProgress('ターミナルで Codex CLI をインストールします...');
+
+        const installCmd = `npm install -g @openai/codex || sudo npm install -g @openai/codex; echo ''; echo 'インストール完了。このウィンドウを閉じてアプリで再確認を押してください。'; read -p ''`;
+        const appleScript = `tell application "Terminal"
+          activate
+          do script "${installCmd.replace(/"/g, '\\"')}"
+        end tell`;
+
+        const proc = spawn('osascript', ['-e', appleScript], {
+          shell: false,
         });
-      } else if (platform === 'win32') {
-        proc = spawn('npm', ['install', '-g', '@openai/codex'], {
-          shell: true,
-          env: { ...process.env },
-        });
-      } else {
-        proc = spawn('/bin/bash', ['-l', '-c', 'npm install -g @openai/codex'], {
-          env: { ...process.env },
-        });
-      }
 
-      let output = '';
-      let errorOutput = '';
-
-      proc.stdout?.on('data', (data) => {
-        const text = data.toString();
-        output += text;
-        onProgress(text);
-      });
-
-      proc.stderr?.on('data', (data) => {
-        const text = data.toString();
-        errorOutput += text;
-        // npm outputs progress to stderr, so show it
-        onProgress(text);
-      });
-
-      proc.on('close', (code) => {
-        if (code === 0) {
-          // Re-find codex path after installation
+        proc.on('close', () => {
           this.findCodexPath();
-          resolve({ success: true, message: 'Codex CLI のインストールが完了しました' });
-        } else {
-          resolve({ success: false, message: errorOutput || `インストールに失敗しました (exit code: ${code})` });
-        }
-      });
+          resolve({
+            success: false,
+            message: 'ターミナルが開きました。インストール完了後「再確認」を押してください。',
+            needsManualInstall: true
+          });
+        });
 
-      proc.on('error', (err) => {
-        resolve({ success: false, message: `インストールエラー: ${err.message}` });
+        proc.on('error', (err) => {
+          resolve({ success: false, message: `ターミナルを開けませんでした: ${err.message}` });
+        });
       });
-    });
+    } else if (platform === 'win32') {
+      // Windows: Use PowerShell with admin rights
+      return new Promise((resolve) => {
+        onProgress('PowerShell で Codex CLI をインストールします...');
+
+        const psScript = `
+          npm install -g @openai/codex
+          Write-Host ''
+          Write-Host 'インストール完了。このウィンドウを閉じてアプリで再確認を押してください。'
+          Read-Host 'Press Enter to close'
+        `;
+
+        const proc = spawn('powershell', [
+          '-Command',
+          `Start-Process powershell -Verb RunAs -ArgumentList '-NoExit', '-Command', '${psScript.replace(/'/g, "''").replace(/\n/g, '; ')}'`
+        ], { shell: true });
+
+        proc.on('close', () => {
+          this.findCodexPath();
+          resolve({
+            success: false,
+            message: 'PowerShell が開きました。インストール完了後「再確認」を押してください。',
+            needsManualInstall: true
+          });
+        });
+
+        proc.on('error', (err) => {
+          resolve({ success: false, message: `PowerShell を開けませんでした: ${err.message}` });
+        });
+      });
+    } else {
+      // Linux: Open terminal for interactive installation
+      return new Promise((resolve) => {
+        onProgress('ターミナルで Codex CLI をインストールします...');
+
+        const installCmd = 'sudo npm install -g @openai/codex; echo ""; echo "インストール完了。このウィンドウを閉じてアプリで再確認を押してください。"; read -p ""';
+
+        const terminals = [
+          { cmd: 'gnome-terminal', args: ['--', 'bash', '-c', installCmd] },
+          { cmd: 'konsole', args: ['-e', 'bash', '-c', installCmd] },
+          { cmd: 'xfce4-terminal', args: ['-e', `bash -c '${installCmd}'`] },
+          { cmd: 'x-terminal-emulator', args: ['-e', `bash -c '${installCmd}'`] },
+        ];
+
+        const tryTerminal = (index: number) => {
+          if (index >= terminals.length) {
+            resolve({ success: false, message: 'ターミナルを開けませんでした。手動でインストールしてください: sudo npm install -g @openai/codex' });
+            return;
+          }
+
+          const term = terminals[index];
+          const proc = spawn(term.cmd, term.args, { detached: true, stdio: 'ignore' });
+
+          proc.on('error', () => {
+            tryTerminal(index + 1);
+          });
+
+          proc.on('spawn', () => {
+            proc.unref();
+            this.findCodexPath();
+            resolve({
+              success: false,
+              message: 'ターミナルが開きました。インストール完了後「再確認」を押してください。',
+              needsManualInstall: true
+            });
+          });
+        };
+
+        tryTerminal(0);
+      });
+    }
   }
 }
 
