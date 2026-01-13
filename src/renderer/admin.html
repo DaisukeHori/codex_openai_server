@@ -1278,16 +1278,55 @@
       const [logs, setLogs] = useState([]);
       const [filter, setFilter] = useState('all');
       const [autoScroll, setAutoScroll] = useState(true);
+      const [latestId, setLatestId] = useState(0);
+      const [loading, setLoading] = useState(true);
       const logsEndRef = useRef(null);
 
-      // Real-time logs will be implemented with WebSocket in future
-      // For now, show empty state
+      // Fetch logs with polling
+      const fetchLogs = useCallback(async (since = 0) => {
+        try {
+          const res = await api.request('/admin/logs?limit=100' + (since ? `&since=${since}` : ''));
+          if (res.data && res.data.length > 0) {
+            setLogs(prev => {
+              const newLogs = res.data.map(l => ({
+                id: l.id,
+                time: new Date(l.timestamp),
+                type: l.type,
+                category: l.category,
+                message: l.message,
+                details: l.details,
+              }));
+              if (since === 0) {
+                return newLogs;
+              }
+              // Merge new logs, avoiding duplicates
+              const existingIds = new Set(prev.map(l => l.id));
+              const toAdd = newLogs.filter(l => !existingIds.has(l.id));
+              return [...prev, ...toAdd].slice(-100);
+            });
+          }
+          if (res.latest_id) {
+            setLatestId(res.latest_id);
+          }
+        } catch (e) {
+          console.error('Failed to fetch logs:', e);
+        } finally {
+          setLoading(false);
+        }
+      }, [api]);
+
+      // Initial load
       useEffect(() => {
-        // TODO: Connect to WebSocket for real-time logs
-        // Example: const ws = new WebSocket(`ws://${serverUrl}/logs`);
-        // ws.onmessage = (event) => { const log = JSON.parse(event.data); setLogs(l => [...l.slice(-99), log]); };
-        // return () => ws.close();
-      }, []);
+        fetchLogs(0);
+      }, [fetchLogs]);
+
+      // Poll for new logs every 2 seconds
+      useEffect(() => {
+        const interval = setInterval(() => {
+          fetchLogs(latestId);
+        }, 2000);
+        return () => clearInterval(interval);
+      }, [fetchLogs, latestId]);
 
       useEffect(() => {
         if (autoScroll && logs.length > 0) logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1296,9 +1335,20 @@
       const filtered = filter === 'all' ? logs : logs.filter(l => l.type === filter);
 
       const handleExport = () => {
-        const content = logs.map(l => `[${l.time.toISOString()}] [${l.type.toUpperCase()}] ${l.message}`).join('\n');
+        const content = logs.map(l => `[${l.time.toISOString()}] [${l.type.toUpperCase()}] [${l.category}] ${l.message}`).join('\n');
         downloadFile(content, 'logs.txt');
         showToast('エクスポートしました', 'success');
+      };
+
+      const handleClear = async () => {
+        try {
+          await api.request('/admin/logs', { method: 'DELETE' });
+          setLogs([]);
+          setLatestId(0);
+          showToast('ログをクリアしました', 'success');
+        } catch (e) {
+          showToast('クリアに失敗しました', 'error');
+        }
       };
 
       return (
@@ -1310,6 +1360,7 @@
                 <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded" />
                 <span className="text-sm">自動スクロール</span>
               </label>
+              <button onClick={handleClear} className="btn-secondary text-sm py-2 px-3 flex items-center gap-1"><Icons.Trash />クリア</button>
               <button onClick={handleExport} className="btn-secondary text-sm py-2 px-3 flex items-center gap-1"><Icons.Download />エクスポート</button>
             </div>
           </div>
@@ -1326,7 +1377,11 @@
 
           <div className="card">
             <div className="h-96 overflow-y-auto scrollbar-thin p-4 bg-gray-900 rounded-xl mono text-sm">
-              {filtered.length === 0 ? (
+              {loading ? (
+                <div className="h-full flex items-center justify-center text-gray-500">
+                  <Spinner size="md" />
+                </div>
+              ) : filtered.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-gray-500">
                   <div className="text-center">
                     <p>ログはありません</p>
@@ -1335,9 +1390,10 @@
                 </div>
               ) : (
                 filtered.map(log => (
-                  <div key={log.id} className={`log-line log-${log.type}`}>
+                  <div key={log.id} className={`log-line log-${log.type} py-1`}>
                     <span className="text-gray-500">[{log.time.toLocaleTimeString()}]</span>
                     <span className={`ml-2 ${log.type === 'error' ? 'text-red-400' : log.type === 'warning' ? 'text-yellow-400' : log.type === 'success' ? 'text-green-400' : 'text-blue-400'}`}>[{log.type.toUpperCase()}]</span>
+                    <span className="ml-2 text-purple-400">[{log.category}]</span>
                     <span className="ml-2 text-gray-300">{log.message}</span>
                   </div>
                 ))
