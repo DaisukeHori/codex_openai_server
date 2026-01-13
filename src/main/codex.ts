@@ -57,26 +57,48 @@ class CodexManager {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else if (platform === 'win32') {
+        // On Windows, npm bin -g returns the full path directly
         output = execSync('npm bin -g 2>nul || npm config get prefix 2>nul', {
           encoding: 'utf-8',
           timeout: 5000,
           stdio: ['pipe', 'pipe', 'pipe'],
+          shell: 'cmd.exe',
         });
       } else {
-        output = execSync('/bin/bash -l -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null"', {
-          encoding: 'utf-8',
-          timeout: 5000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
+        // Linux: try bash with fallback
+        try {
+          output = execSync('/bin/bash -l -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null"', {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        } catch {
+          // Fallback to /usr/bin/bash or sh
+          output = execSync('bash -l -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null" || sh -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null"', {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        }
       }
 
       if (output && output.trim()) {
         const binPath = output.trim().split('\n')[0];
-        // If it's a prefix, append /bin
-        if (!binPath.endsWith('/bin') && !binPath.endsWith('\\bin')) {
-          return path.join(binPath, 'bin');
+
+        if (platform === 'win32') {
+          // Windows: npm bin -g returns full path, npm config get prefix needs no suffix
+          // Check if it's a prefix (doesn't contain node_modules)
+          if (!binPath.includes('node_modules')) {
+            return binPath; // On Windows, executables are in the prefix directly
+          }
+          return binPath;
+        } else {
+          // macOS/Linux: If it's a prefix, append /bin
+          if (!binPath.endsWith('/bin') && !binPath.endsWith('\\bin')) {
+            return path.join(binPath, 'bin');
+          }
+          return binPath;
         }
-        return binPath;
       }
     } catch (e) {
       // Ignore errors
@@ -85,17 +107,28 @@ class CodexManager {
   }
   
   private findCodexPath(): void {
+    const isWindows = process.platform === 'win32';
+    const exe = isWindows ? 'codex.cmd' : 'codex';
+
     const possiblePaths = [
+      // Common Unix paths
       '/usr/local/bin/codex',
       '/usr/bin/codex',
       '/opt/node22/bin/codex',
+      // Windows paths
       path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'),
       path.join(process.env.LOCALAPPDATA || '', 'npm', 'codex.cmd'),
-      path.join(os.homedir(), '.npm-global', 'bin', 'codex'),
+      path.join(process.env.PROGRAMFILES || '', 'nodejs', 'codex.cmd'),
+      // Cross-platform npm global paths
+      path.join(os.homedir(), '.npm-global', 'bin', exe),
+      path.join(os.homedir(), '.npm', 'bin', exe),
+      // NVM specific path
       path.join(os.homedir(), '.nvm', 'versions', 'node', 'v22.0.0', 'bin', 'codex'),
-      // Additional common npm global paths for macOS
-      path.join(os.homedir(), '.npm', 'bin', 'codex'),
+      // macOS Homebrew
       '/opt/homebrew/bin/codex',
+      // Linux specific paths
+      '/snap/bin/codex',
+      path.join(os.homedir(), '.local', 'bin', 'codex'),
       '/usr/local/lib/node_modules/.bin/codex',
       // NVM paths for various Node versions
       ...this.getNvmPaths(),
@@ -200,11 +233,20 @@ class CodexManager {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else {
-        output = execSync('/bin/bash -l -c "which codex"', {
-          encoding: 'utf-8',
-          timeout: 5000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
+        // Linux: try /bin/bash first, then fallback
+        try {
+          output = execSync('/bin/bash -l -c "which codex"', {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        } catch {
+          output = execSync('bash -l -c "which codex" || which codex', {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        }
       }
 
       if (output && output.trim()) {
@@ -230,16 +272,26 @@ class CodexManager {
     }
 
     // Strategy 3: Check hardcoded paths
+    const isWindows = process.platform === 'win32';
+    const exe = isWindows ? 'codex.cmd' : 'codex';
     const possiblePaths = [
+      // Common Unix paths
       '/usr/local/bin/codex',
       '/usr/bin/codex',
       '/opt/node22/bin/codex',
       '/opt/homebrew/bin/codex',
+      // Windows paths
       path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'),
       path.join(process.env.LOCALAPPDATA || '', 'npm', 'codex.cmd'),
-      path.join(os.homedir(), '.npm-global', 'bin', 'codex'),
-      path.join(os.homedir(), '.npm', 'bin', 'codex'),
+      path.join(process.env.PROGRAMFILES || '', 'nodejs', 'codex.cmd'),
+      // Cross-platform npm global paths
+      path.join(os.homedir(), '.npm-global', 'bin', exe),
+      path.join(os.homedir(), '.npm', 'bin', exe),
+      // Linux specific paths
+      '/snap/bin/codex',
+      path.join(os.homedir(), '.local', 'bin', 'codex'),
       '/usr/local/lib/node_modules/.bin/codex',
+      // NVM paths for various Node versions
       ...this.getNvmPaths(),
     ];
 
@@ -272,11 +324,20 @@ class CodexManager {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else {
-        output = execSync('/bin/bash -l -c "codex --version"', {
-          encoding: 'utf-8',
-          timeout: 10000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
+        // Linux: try /bin/bash first, then fallback
+        try {
+          output = execSync('/bin/bash -l -c "codex --version"', {
+            encoding: 'utf-8',
+            timeout: 10000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        } catch {
+          output = execSync('bash -l -c "codex --version" || codex --version', {
+            encoding: 'utf-8',
+            timeout: 10000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        }
       }
 
       if (output && output.includes('codex')) {

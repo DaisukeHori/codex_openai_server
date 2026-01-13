@@ -78,26 +78,48 @@ export class ClaudeManager {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else if (platform === 'win32') {
+        // On Windows, npm bin -g returns the full path directly
         output = execSync('npm bin -g 2>nul || npm config get prefix 2>nul', {
           encoding: 'utf-8',
           timeout: 5000,
           stdio: ['pipe', 'pipe', 'pipe'],
+          shell: 'cmd.exe',
         });
       } else {
-        output = execSync('/bin/bash -l -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null"', {
-          encoding: 'utf-8',
-          timeout: 5000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
+        // Linux: try bash with fallback
+        try {
+          output = execSync('/bin/bash -l -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null"', {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        } catch {
+          // Fallback to /usr/bin/bash or sh
+          output = execSync('bash -l -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null" || sh -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null"', {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        }
       }
 
       if (output && output.trim()) {
         const binPath = output.trim().split('\n')[0];
-        // If it's a prefix, append /bin
-        if (!binPath.endsWith('/bin') && !binPath.endsWith('\\bin')) {
-          return path.join(binPath, 'bin');
+
+        if (platform === 'win32') {
+          // Windows: npm bin -g returns full path, npm config get prefix needs no suffix
+          // Check if it's a prefix (doesn't contain node_modules)
+          if (!binPath.includes('node_modules')) {
+            return binPath; // On Windows, executables are in the prefix directly
+          }
+          return binPath;
+        } else {
+          // macOS/Linux: If it's a prefix, append /bin
+          if (!binPath.endsWith('/bin') && !binPath.endsWith('\\bin')) {
+            return path.join(binPath, 'bin');
+          }
+          return binPath;
         }
-        return binPath;
       }
     } catch (e) {
       // Ignore errors
@@ -106,17 +128,28 @@ export class ClaudeManager {
   }
 
   private findClaudePath(): void {
+    const isWindows = process.platform === 'win32';
+    const exe = isWindows ? 'claude.cmd' : 'claude';
+
     const possiblePaths = [
+      // Common Unix paths
       '/usr/local/bin/claude',
       '/usr/bin/claude',
       '/opt/node22/bin/claude',
+      // Windows paths
       path.join(process.env.APPDATA || '', 'npm', 'claude.cmd'),
       path.join(process.env.LOCALAPPDATA || '', 'npm', 'claude.cmd'),
-      path.join(os.homedir(), '.npm-global', 'bin', 'claude'),
+      path.join(process.env.PROGRAMFILES || '', 'nodejs', 'claude.cmd'),
+      // Cross-platform npm global paths
+      path.join(os.homedir(), '.npm-global', 'bin', exe),
+      path.join(os.homedir(), '.npm', 'bin', exe),
+      // NVM specific path
       path.join(os.homedir(), '.nvm', 'versions', 'node', 'v22.0.0', 'bin', 'claude'),
-      // Additional common npm global paths for macOS
-      path.join(os.homedir(), '.npm', 'bin', 'claude'),
+      // macOS Homebrew
       '/opt/homebrew/bin/claude',
+      // Linux specific paths
+      '/snap/bin/claude',
+      path.join(os.homedir(), '.local', 'bin', 'claude'),
       '/usr/local/lib/node_modules/.bin/claude',
       // NVM paths for various Node versions
       ...this.getNvmPaths(),
@@ -225,11 +258,20 @@ export class ClaudeManager {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else {
-        output = execSync('/bin/bash -l -c "which claude"', {
-          encoding: 'utf-8',
-          timeout: 5000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
+        // Linux: try /bin/bash first, then fallback
+        try {
+          output = execSync('/bin/bash -l -c "which claude"', {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        } catch {
+          output = execSync('bash -l -c "which claude" || which claude', {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        }
       }
 
       if (output && output.trim()) {
@@ -255,16 +297,26 @@ export class ClaudeManager {
     }
 
     // Strategy 3: Check hardcoded paths
+    const isWindows = process.platform === 'win32';
+    const exe = isWindows ? 'claude.cmd' : 'claude';
     const possiblePaths = [
+      // Common Unix paths
       '/usr/local/bin/claude',
       '/usr/bin/claude',
       '/opt/node22/bin/claude',
       '/opt/homebrew/bin/claude',
+      // Windows paths
       path.join(process.env.APPDATA || '', 'npm', 'claude.cmd'),
       path.join(process.env.LOCALAPPDATA || '', 'npm', 'claude.cmd'),
-      path.join(os.homedir(), '.npm-global', 'bin', 'claude'),
-      path.join(os.homedir(), '.npm', 'bin', 'claude'),
+      path.join(process.env.PROGRAMFILES || '', 'nodejs', 'claude.cmd'),
+      // Cross-platform npm global paths
+      path.join(os.homedir(), '.npm-global', 'bin', exe),
+      path.join(os.homedir(), '.npm', 'bin', exe),
+      // Linux specific paths
+      '/snap/bin/claude',
+      path.join(os.homedir(), '.local', 'bin', 'claude'),
       '/usr/local/lib/node_modules/.bin/claude',
+      // NVM paths for various Node versions
       ...this.getNvmPaths(),
     ];
 
@@ -297,11 +349,20 @@ export class ClaudeManager {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else {
-        output = execSync('/bin/bash -l -c "claude --version"', {
-          encoding: 'utf-8',
-          timeout: 10000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
+        // Linux: try /bin/bash first, then fallback
+        try {
+          output = execSync('/bin/bash -l -c "claude --version"', {
+            encoding: 'utf-8',
+            timeout: 10000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        } catch {
+          output = execSync('bash -l -c "claude --version" || claude --version', {
+            encoding: 'utf-8',
+            timeout: 10000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        }
       }
 
       if (output && output.includes('claude')) {
