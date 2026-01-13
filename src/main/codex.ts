@@ -21,10 +21,67 @@ export interface CodexProcess {
 class CodexManager {
   private codexPath: string = 'codex';
   private activeProcesses: Map<string, CodexProcess> = new Map();
-  
+
   constructor() {
     // Try to find codex in common locations
     this.findCodexPath();
+  }
+
+  // Get possible NVM paths for various Node versions
+  private getNvmPaths(): string[] {
+    const nvmDir = path.join(os.homedir(), '.nvm', 'versions', 'node');
+    const paths: string[] = [];
+    try {
+      if (fs.existsSync(nvmDir)) {
+        const versions = fs.readdirSync(nvmDir);
+        for (const version of versions) {
+          paths.push(path.join(nvmDir, version, 'bin', 'codex'));
+        }
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+    return paths;
+  }
+
+  // Get npm global bin directory using npm command
+  private getNpmGlobalBin(): string | null {
+    try {
+      const platform = process.platform;
+      let output: string;
+
+      if (platform === 'darwin') {
+        output = execSync('/bin/zsh -l -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null"', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else if (platform === 'win32') {
+        output = execSync('npm bin -g 2>nul || npm config get prefix 2>nul', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else {
+        output = execSync('/bin/bash -l -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null"', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      }
+
+      if (output && output.trim()) {
+        const binPath = output.trim().split('\n')[0];
+        // If it's a prefix, append /bin
+        if (!binPath.endsWith('/bin') && !binPath.endsWith('\\bin')) {
+          return path.join(binPath, 'bin');
+        }
+        return binPath;
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+    return null;
   }
   
   private findCodexPath(): void {
@@ -36,6 +93,12 @@ class CodexManager {
       path.join(process.env.LOCALAPPDATA || '', 'npm', 'codex.cmd'),
       path.join(os.homedir(), '.npm-global', 'bin', 'codex'),
       path.join(os.homedir(), '.nvm', 'versions', 'node', 'v22.0.0', 'bin', 'codex'),
+      // Additional common npm global paths for macOS
+      path.join(os.homedir(), '.npm', 'bin', 'codex'),
+      '/opt/homebrew/bin/codex',
+      '/usr/local/lib/node_modules/.bin/codex',
+      // NVM paths for various Node versions
+      ...this.getNvmPaths(),
     ];
 
     // First check hardcoded paths
@@ -48,6 +111,20 @@ class CodexManager {
       } catch (e) {
         // Continue checking
       }
+    }
+
+    // Try npm global bin directory
+    try {
+      const npmBin = this.getNpmGlobalBin();
+      if (npmBin) {
+        const codexInNpm = path.join(npmBin, process.platform === 'win32' ? 'codex.cmd' : 'codex');
+        if (fs.existsSync(codexInNpm)) {
+          this.codexPath = codexInNpm;
+          return;
+        }
+      }
+    } catch (e) {
+      // Continue
     }
 
     // If not found, try to find via 'which' command using login shell
@@ -105,12 +182,12 @@ class CodexManager {
   }
 
   async isInstalled(): Promise<boolean> {
+    // Strategy 1: Try which/where command with login shell
     try {
       const platform = process.platform;
       let output: string;
 
       if (platform === 'darwin') {
-        // Use login shell on macOS to get proper PATH
         output = execSync('/bin/zsh -l -c "which codex"', {
           encoding: 'utf-8',
           timeout: 5000,
@@ -123,7 +200,6 @@ class CodexManager {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else {
-        // Linux
         output = execSync('/bin/bash -l -c "which codex"', {
           encoding: 'utf-8',
           timeout: 5000,
@@ -135,10 +211,83 @@ class CodexManager {
         this.codexPath = output.trim().split('\n')[0];
         return true;
       }
-      return false;
     } catch (e) {
-      return false;
+      // Strategy 1 failed, try other methods
     }
+
+    // Strategy 2: Check npm global bin directory
+    try {
+      const npmBin = this.getNpmGlobalBin();
+      if (npmBin) {
+        const codexInNpm = path.join(npmBin, process.platform === 'win32' ? 'codex.cmd' : 'codex');
+        if (fs.existsSync(codexInNpm)) {
+          this.codexPath = codexInNpm;
+          return true;
+        }
+      }
+    } catch (e) {
+      // Strategy 2 failed
+    }
+
+    // Strategy 3: Check hardcoded paths
+    const possiblePaths = [
+      '/usr/local/bin/codex',
+      '/usr/bin/codex',
+      '/opt/node22/bin/codex',
+      '/opt/homebrew/bin/codex',
+      path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'),
+      path.join(process.env.LOCALAPPDATA || '', 'npm', 'codex.cmd'),
+      path.join(os.homedir(), '.npm-global', 'bin', 'codex'),
+      path.join(os.homedir(), '.npm', 'bin', 'codex'),
+      '/usr/local/lib/node_modules/.bin/codex',
+      ...this.getNvmPaths(),
+    ];
+
+    for (const p of possiblePaths) {
+      try {
+        if (fs.existsSync(p)) {
+          this.codexPath = p;
+          return true;
+        }
+      } catch (e) {
+        // Continue checking
+      }
+    }
+
+    // Strategy 4: Try running codex --version directly
+    try {
+      const platform = process.platform;
+      let output: string;
+
+      if (platform === 'darwin') {
+        output = execSync('/bin/zsh -l -c "codex --version"', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else if (platform === 'win32') {
+        output = execSync('codex --version', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else {
+        output = execSync('/bin/bash -l -c "codex --version"', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      }
+
+      if (output && output.includes('codex')) {
+        this.codexPath = 'codex';
+        return true;
+      }
+    } catch (e) {
+      // Strategy 4 failed
+    }
+
+    return false;
   }
 
   async getVersion(): Promise<string | null> {
