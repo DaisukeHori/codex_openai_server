@@ -33,7 +33,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Onboarding
   completeOnboarding: () => ipcRenderer.invoke('onboarding:complete'),
   isOnboardingComplete: () => ipcRenderer.invoke('onboarding:isComplete'),
-  
+  resetOnboarding: () => ipcRenderer.invoke('onboarding:reset'),
+  getServerUrl: () => ipcRenderer.invoke('config:getServerUrl'),
+  getMasterKey: () => ipcRenderer.invoke('config:getMasterKey'),
+
   // Window
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   closeWindow: () => ipcRenderer.invoke('window:close'),
@@ -73,6 +76,9 @@ declare global {
       getTunnelStatus: () => Promise<any>;
       completeOnboarding: () => Promise<void>;
       isOnboardingComplete: () => Promise<boolean>;
+      resetOnboarding: () => Promise<void>;
+      getServerUrl: () => Promise<string>;
+      getMasterKey: () => Promise<string>;
       minimizeWindow: () => Promise<void>;
       closeWindow: () => Promise<void>;
       openExternal: (url: string) => Promise<void>;

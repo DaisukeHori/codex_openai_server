@@ -373,7 +373,7 @@ ipcMain.handle('tunnel:status', () => tunnelManager.getStatus());
 // Onboarding
 ipcMain.handle('onboarding:complete', () => {
   configManager.completeOnboarding();
-  
+
   // Restart app to load main UI
   if (mainWindow) {
     mainWindow.setSize(1200, 800);
@@ -383,6 +383,24 @@ ipcMain.handle('onboarding:complete', () => {
   }
 });
 ipcMain.handle('onboarding:isComplete', () => configManager.isOnboardingComplete());
+ipcMain.handle('onboarding:reset', () => {
+  configManager.resetOnboarding();
+
+  // Go back to onboarding UI
+  if (mainWindow) {
+    destroyTray();
+    mainWindow.setSize(800, 600);
+    mainWindow.center();
+    mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'onboarding.html'));
+  }
+});
+ipcMain.handle('config:getServerUrl', () => {
+  const port = configManager.get('port');
+  return `http://localhost:${port}`;
+});
+ipcMain.handle('config:getMasterKey', () => {
+  return configManager.get('masterKey');
+});
 
 // Window
 ipcMain.handle('window:minimize', () => {
