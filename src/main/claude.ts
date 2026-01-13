@@ -410,46 +410,39 @@ export class ClaudeManager {
 
   async checkAuth(): Promise<{ authenticated: boolean; method: 'api_key' | 'subscription' | null; message: string }> {
     try {
-      // Determine auth method first
-      let method: 'api_key' | 'subscription' | null = null;
-
-      if (process.env.ANTHROPIC_API_KEY) {
-        method = 'api_key';
-      } else {
-        const claudeDir = path.join(os.homedir(), '.claude');
-        if (fs.existsSync(claudeDir)) {
-          method = 'subscription';
-        }
-      }
-
-      // Actually test if Claude Code works by running a minimal command
-      // Using --help is fast and doesn't require authentication
-      // But to truly test auth, we need to try a simple prompt
+      // First check if CLI is available and working
       try {
-        // First check if CLI is available
         await this.runRawCommand(['--version']);
-
-        // If ANTHROPIC_API_KEY is set, assume it's valid (actual test would be slow)
-        if (method === 'api_key') {
-          return { authenticated: true, method: 'api_key', message: 'Authenticated via ANTHROPIC_API_KEY' };
-        }
-
-        // For subscription, check if credentials exist
-        const claudeDir = path.join(os.homedir(), '.claude');
-        const credentialsExist = fs.existsSync(claudeDir) &&
-          (fs.existsSync(path.join(claudeDir, 'settings.json')) ||
-           fs.existsSync(path.join(claudeDir, 'credentials.json')));
-
-        if (credentialsExist) {
-          return { authenticated: true, method: 'subscription', message: 'Authenticated via Claude subscription' };
-        }
-
-        // CLI works but no clear auth method - might still work
-        return { authenticated: true, method: 'subscription', message: 'Claude Code available' };
       } catch (cmdError) {
         // CLI command failed
         return { authenticated: false, method: null, message: 'Claude Code not working' };
       }
+
+      // CLI works! Now determine auth method
+      // Priority: API key > subscription (via ~/.claude directory)
+      if (process.env.ANTHROPIC_API_KEY) {
+        return { authenticated: true, method: 'api_key', message: 'Authenticated via ANTHROPIC_API_KEY' };
+      }
+
+      // Check for ~/.claude directory - if it exists and CLI works, user is authenticated
+      // Claude Code stores various auth files here, we don't need to check specific files
+      const claudeDir = path.join(os.homedir(), '.claude');
+      if (fs.existsSync(claudeDir)) {
+        // Check for any auth-related files (credentials, auth, settings, etc.)
+        try {
+          const files = fs.readdirSync(claudeDir);
+          if (files.length > 0) {
+            return { authenticated: true, method: 'subscription', message: 'Authenticated via Claude subscription' };
+          }
+        } catch (e) {
+          // Directory exists but can't read - still consider authenticated if CLI works
+        }
+        return { authenticated: true, method: 'subscription', message: 'Claude Code authenticated' };
+      }
+
+      // CLI works without ~/.claude directory - might be using API key in other way
+      // Since CLI runs successfully, assume it's authenticated
+      return { authenticated: true, method: null, message: 'Claude Code available' };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return { authenticated: false, method: null, message: msg };
