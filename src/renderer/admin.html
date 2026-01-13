@@ -11,108 +11,254 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-    body { font-family: 'Inter', sans-serif; }
-    code, .mono { font-family: 'JetBrains Mono', monospace; }
-    
-    /* Light theme */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #fafafa;
+      color: #111;
+    }
+
+    code, .mono { font-family: 'SF Mono', Consolas, monospace; font-size: 13px; }
+
+    /* CSS Variables - Minimal theme */
     :root {
-      --bg-primary: #f9fafb;
+      --bg-primary: #fafafa;
       --bg-secondary: #ffffff;
-      --bg-tertiary: #f3f4f6;
-      --text-primary: #111827;
-      --text-secondary: #4b5563;
-      --text-muted: #9ca3af;
-      --border: #e5e7eb;
-      --sidebar-bg: linear-gradient(180deg, #111827 0%, #1f2937 100%);
-      --card-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      --bg-tertiary: #f5f5f5;
+      --text-primary: #111;
+      --text-secondary: #666;
+      --text-muted: #888;
+      --border: #e5e5e5;
+      --accent: #111;
+      --accent-hover: #333;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
     }
-    
-    /* Dark theme */
-    .dark {
-      --bg-primary: #0f172a;
-      --bg-secondary: #1e293b;
-      --bg-tertiary: #334155;
-      --text-primary: #f1f5f9;
-      --text-secondary: #cbd5e1;
-      --text-muted: #64748b;
-      --border: #334155;
-      --sidebar-bg: linear-gradient(180deg, #020617 0%, #0f172a 100%);
-      --card-shadow: 0 1px 3px rgba(0,0,0,0.3);
+
+    body { background: var(--bg-primary); color: var(--text-primary); }
+
+    /* Card - Simple border style */
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
     }
-    
-    body { background: var(--bg-primary); color: var(--text-primary); transition: background 0.3s, color 0.3s; }
-    .card { background: var(--bg-secondary); border-radius: 16px; box-shadow: var(--card-shadow); border: 1px solid var(--border); }
-    .sidebar { background: var(--sidebar-bg); }
-    .input-field { background: var(--bg-secondary); border: 2px solid var(--border); color: var(--text-primary); }
-    .input-field:focus { border-color: #6366f1; }
-    
-    .gradient-primary { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
-    .gradient-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-    .gradient-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-    .gradient-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
-    
-    .sidebar-item { transition: all 0.2s; border-radius: 10px; margin: 4px 8px; }
-    .sidebar-item:hover { background: rgba(255,255,255,0.1); }
-    .sidebar-item.active { background: rgba(99, 102, 241, 0.3); color: white; }
-    
-    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-    .animate-slide-up { animation: slideUp 0.3s ease-out; }
-    .animate-pulse-slow { animation: pulse 2s infinite; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-    
-    .key-blur { filter: blur(4px); transition: filter 0.2s; }
-    .key-blur:hover { filter: blur(0); }
-    
-    .status-dot { width: 10px; height: 10px; border-radius: 50%; }
-    .status-online { background: #10b981; box-shadow: 0 0 10px #10b981; }
-    .status-offline { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
-    
-    .btn-primary { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 10px 20px; border-radius: 10px; font-weight: 500; transition: all 0.2s; border: none; cursor: pointer; }
-    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4); }
-    .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); padding: 10px 20px; border-radius: 10px; font-weight: 500; border: none; cursor: pointer; }
-    .btn-secondary:hover { opacity: 0.8; }
-    .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; }
-    .btn-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
-    
-    .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-    .badge-success { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-    .badge-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-    .badge-info { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
-    .badge-purple { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
-    
-    .table-row { transition: background 0.15s; }
+
+    /* Sidebar - Light style like onboarding */
+    .sidebar {
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      margin: 2px 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      border-radius: 6px;
+      border-left: 2px solid transparent;
+    }
+
+    .sidebar-item:hover {
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+    }
+
+    .sidebar-item.active {
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+      border-left-color: var(--accent);
+    }
+
+    /* Input fields */
+    .input-field {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      transition: border-color 0.15s;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Buttons - Simple solid style */
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border-color: var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-tertiary);
+      border-color: #ccc;
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+      border-color: var(--danger);
+    }
+
+    .btn-danger:hover {
+      opacity: 0.9;
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: #fff;
+      border-color: var(--success);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Badges - Simple style */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .badge-success { background: #dcfce7; color: #166534; }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+    .badge-danger { background: #fee2e2; color: #991b1b; }
+    .badge-info { background: #e0e7ff; color: #3730a3; }
+    .badge-purple { background: #f3e8ff; color: #6b21a8; }
+
+    /* Status dots */
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .status-online { background: var(--success); }
+    .status-offline { background: var(--danger); }
+
+    /* Table rows */
+    .table-row { transition: background 0.1s; }
     .table-row:hover { background: var(--bg-tertiary); }
-    
+
+    /* Key blur */
+    .key-blur { filter: blur(4px); transition: filter 0.15s; }
+    .key-blur:hover { filter: blur(0); }
+
+    /* Log lines */
+    .log-line { font-size: 12px; padding: 6px 10px; border-radius: 4px; margin: 2px 0; }
+    .log-info { background: #eff6ff; border-left: 2px solid #3b82f6; }
+    .log-success { background: #f0fdf4; border-left: 2px solid #22c55e; }
+    .log-warning { background: #fffbeb; border-left: 2px solid #f59e0b; }
+    .log-error { background: #fef2f2; border-left: 2px solid #ef4444; }
+
+    /* Toggle switch */
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 22px;
+      background: var(--border);
+      border-radius: 11px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle-switch.active { background: var(--accent); }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .toggle-switch.active::after { transform: translateX(22px); }
+
+    /* Scrollbar */
     .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
-    .scrollbar-thin::-webkit-scrollbar-track { background: var(--bg-tertiary); border-radius: 3px; }
-    .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
-    
-    .checkbox-row { transition: all 0.2s; }
-    .checkbox-row:hover { background: var(--bg-tertiary); }
-    .checkbox-row.selected { background: rgba(99, 102, 241, 0.1); }
-    
-    .log-line { font-size: 12px; padding: 4px 8px; border-radius: 4px; margin: 2px 0; }
-    .log-info { background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; }
-    .log-success { background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10b981; }
-    .log-warning { background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; }
-    .log-error { background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; }
-    
-    .notification-badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; background: #ef4444; color: white; font-size: 10px; font-weight: 600; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
-    
-    /* Mobile sidebar */
+    .scrollbar-thin::-webkit-scrollbar-track { background: var(--bg-tertiary); }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+    /* Simple animations */
+    .animate-fade-in { animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* Notification badge */
+    .notification-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 16px;
+      height: 16px;
+      background: var(--danger);
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Mobile */
     @media (max-width: 768px) {
       .sidebar-mobile-hidden { transform: translateX(-100%); }
       .sidebar-mobile-visible { transform: translateX(0); }
     }
-    
-    .toggle-switch { position: relative; width: 48px; height: 24px; background: var(--bg-tertiary); border-radius: 12px; cursor: pointer; transition: background 0.3s; }
-    .toggle-switch.active { background: #6366f1; }
-    .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: transform 0.3s; }
-    .toggle-switch.active::after { transform: translateX(24px); }
+
+    /* Checkbox row */
+    .checkbox-row { transition: background 0.1s; }
+    .checkbox-row:hover { background: var(--bg-tertiary); }
+    .checkbox-row.selected { background: #f0f9ff; }
+
+    /* Gradient classes removed - using solid colors instead */
+    .gradient-primary { background: var(--accent); }
+    .gradient-success { background: var(--success); }
+    .gradient-warning { background: var(--warning); }
+    .gradient-danger { background: var(--danger); }
   </style>
 </head>
 <body>
@@ -1523,20 +1669,22 @@
 
       return (
         <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="card w-full max-w-md p-8">
-            <div className="absolute top-4 right-4">
-              <button onClick={toggle} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)]">{dark ? <Icons.Sun /> : <Icons.Moon />}</button>
+          <div className="card w-full max-w-sm p-6">
+            <div className="mb-6">
+              <h1 className="text-lg font-semibold" style={{letterSpacing: '-0.3px'}}>Codex API Server</h1>
+              <p className="text-[var(--text-muted)] text-sm mt-1">管理コンソールにログイン</p>
             </div>
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 gradient-primary rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg"><span className="text-4xl">🚀</span></div>
-              <h1 className="text-2xl font-bold">Codex API Server</h1>
-              <p className="text-[var(--text-muted)] mt-2">管理コンソールにログイン</p>
-            </div>
-            <form onSubmit={submit} className="space-y-5">
-              <div><label className="block text-sm font-medium mb-2">サーバーURL</label><input type="url" value={serverUrl} onChange={e => setServerUrl(e.target.value)} placeholder="http://localhost:8080" className="input-field" required /></div>
-              <div><label className="block text-sm font-medium mb-2">マスターキー</label><input type="password" value={masterKey} onChange={e => setMasterKey(e.target.value)} placeholder="MASTER_KEY の値" className="input-field" required /></div>
-              {error && <div className="bg-red-500/10 text-red-500 px-4 py-3 rounded-xl text-sm">⚠️ {error}</div>}
-              <button type="submit" disabled={loading} className="w-full btn-primary py-4 flex items-center justify-center gap-2 disabled:opacity-50">{loading ? <><Spinner size="sm" />接続中...</> : 'ログイン'}</button>
+            <form onSubmit={submit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[var(--text-secondary)]">サーバーURL</label>
+                <input type="url" value={serverUrl} onChange={e => setServerUrl(e.target.value)} placeholder="http://localhost:8080" className="input-field" required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[var(--text-secondary)]">マスターキー</label>
+                <input type="password" value={masterKey} onChange={e => setMasterKey(e.target.value)} placeholder="MASTER_KEY の値" className="input-field" required />
+              </div>
+              {error && <div className="text-[var(--danger)] text-xs p-3 bg-[#fee2e2] rounded">{error}</div>}
+              <button type="submit" disabled={loading} className="w-full btn btn-primary py-2.5 flex items-center justify-center gap-2">{loading ? <><Spinner size="sm" />接続中...</> : 'ログイン'}</button>
             </form>
           </div>
         </div>
@@ -1595,25 +1743,19 @@
           </button>
 
           {/* Sidebar */}
-          <aside className={`sidebar w-64 flex flex-col fixed md:static inset-y-0 left-0 z-40 transition-transform duration-300 ${sidebarOpen ? '' : '-translate-x-full md:translate-x-0'}`}>
-            <div className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 gradient-primary rounded-xl flex items-center justify-center text-white font-bold shadow-lg">C</div>
-                <div><h1 className="text-white font-semibold">Codex API</h1><p className="text-gray-400 text-xs">管理コンソール</p></div>
-              </div>
+          <aside className={`sidebar w-56 flex flex-col fixed md:static inset-y-0 left-0 z-40 transition-transform duration-200 ${sidebarOpen ? '' : '-translate-x-full md:translate-x-0'}`}>
+            <div className="p-6 pb-4">
+              <div className="text-sm font-semibold text-[var(--text-primary)]" style={{letterSpacing: '-0.3px'}}>Codex API Server</div>
             </div>
-            <nav className="flex-1 px-2 py-4">
+            <nav className="flex-1">
               {nav.map(n => (
-                <button key={n.id} onClick={() => { setPage(n.id); setSidebarOpen(false); }} className={`sidebar-item w-full flex items-center gap-3 px-4 py-3 text-left text-gray-300 ${page === n.id ? 'active' : ''}`}>
+                <button key={n.id} onClick={() => { setPage(n.id); setSidebarOpen(false); }} className={`sidebar-item w-full text-left ${page === n.id ? 'active' : ''}`}>
                   {n.icon}<span>{n.label}</span>
                 </button>
               ))}
             </nav>
-            <div className="p-4 border-t border-gray-700 space-y-2">
-              <button onClick={toggle} className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl">
-                {dark ? <Icons.Sun /> : <Icons.Moon />}<span>{dark ? 'ライトモード' : 'ダークモード'}</span>
-              </button>
-              <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl">
+            <div className="p-4 border-t border-[var(--border)]">
+              <button onClick={onLogout} className="sidebar-item w-full text-left">
                 <Icons.Logout /><span>ログアウト</span>
               </button>
             </div>
