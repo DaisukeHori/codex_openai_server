@@ -215,139 +215,139 @@ class CodexManager {
   }
 
   async isInstalled(): Promise<boolean> {
-    // Strategy 1: Try which/where command with login shell
-    try {
-      const platform = process.platform;
-      let output: string;
+    const platform = process.platform;
+    const isWindows = platform === 'win32';
+    const exe = isWindows ? 'codex.cmd' : 'codex';
+    const home = os.homedir();
 
-      if (platform === 'darwin') {
-        output = execSync('/bin/zsh -l -c "which codex"', {
-          encoding: 'utf-8',
-          timeout: 5000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-      } else if (platform === 'win32') {
-        output = execSync('where codex', {
-          encoding: 'utf-8',
-          timeout: 5000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-      } else {
-        // Linux: try /bin/bash first, then fallback
-        try {
-          output = execSync('/bin/bash -l -c "which codex"', {
-            encoding: 'utf-8',
-            timeout: 5000,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
-        } catch {
-          output = execSync('bash -l -c "which codex" || which codex', {
-            encoding: 'utf-8',
-            timeout: 5000,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
+    // Build expanded PATH for searching
+    const extraPaths = [
+      path.join(home, '.local', 'bin'),
+      path.join(home, '.npm-global', 'bin'),
+      path.join(home, '.npm', 'bin'),
+      path.join(home, '.volta', 'bin'),
+      path.join(home, '.yarn', 'bin'),
+      '/usr/local/bin',
+      '/usr/bin',
+      '/opt/homebrew/bin',
+    ];
+    const expandedPath = [...extraPaths, process.env.PATH].filter(Boolean).join(path.delimiter);
+
+    // Strategy 1: Check hardcoded paths first (fastest, no subprocess)
+    const possiblePaths = [
+      // Common Unix paths
+      '/usr/local/bin/codex',
+      '/usr/bin/codex',
+      '/opt/homebrew/bin/codex',
+      // User local paths (common for npm -g on Linux without sudo)
+      path.join(home, '.local', 'bin', 'codex'),
+      // npm global paths
+      path.join(home, '.npm-global', 'bin', exe),
+      path.join(home, '.npm', 'bin', exe),
+      path.join(home, 'npm-global', 'bin', exe),
+      // volta
+      path.join(home, '.volta', 'bin', 'codex'),
+      // yarn global
+      path.join(home, '.yarn', 'bin', 'codex'),
+      path.join(home, '.config', 'yarn', 'global', 'node_modules', '.bin', 'codex'),
+      // pnpm global
+      path.join(home, '.local', 'share', 'pnpm', 'codex'),
+      // snap
+      '/snap/bin/codex',
+      // Windows paths
+      path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'),
+      path.join(process.env.LOCALAPPDATA || '', 'npm', 'codex.cmd'),
+      // NVM paths
+      ...this.getNvmPaths(),
+    ];
+
+    for (const p of possiblePaths) {
+      try {
+        if (p && fs.existsSync(p)) {
+          this.codexPath = p;
+          console.log(`[Codex] Found at: ${p}`);
+          return true;
         }
+      } catch {
+        // Continue
       }
-
-      if (output && output.trim()) {
-        this.codexPath = output.trim().split('\n')[0];
-        return true;
-      }
-    } catch (e) {
-      // Strategy 1 failed, try other methods
     }
 
     // Strategy 2: Check npm global bin directory
     try {
       const npmBin = this.getNpmGlobalBin();
       if (npmBin) {
-        const codexInNpm = path.join(npmBin, process.platform === 'win32' ? 'codex.cmd' : 'codex');
+        const codexInNpm = path.join(npmBin, exe);
         if (fs.existsSync(codexInNpm)) {
           this.codexPath = codexInNpm;
+          console.log(`[Codex] Found via npm bin: ${codexInNpm}`);
           return true;
         }
       }
-    } catch (e) {
-      // Strategy 2 failed
+    } catch {
+      // Continue
     }
 
-    // Strategy 3: Check hardcoded paths
-    const isWindows = process.platform === 'win32';
-    const exe = isWindows ? 'codex.cmd' : 'codex';
-    const possiblePaths = [
-      // Common Unix paths
-      '/usr/local/bin/codex',
-      '/usr/bin/codex',
-      '/opt/node22/bin/codex',
-      '/opt/homebrew/bin/codex',
-      // Windows paths
-      path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'),
-      path.join(process.env.LOCALAPPDATA || '', 'npm', 'codex.cmd'),
-      path.join(process.env.PROGRAMFILES || '', 'nodejs', 'codex.cmd'),
-      // Cross-platform npm global paths
-      path.join(os.homedir(), '.npm-global', 'bin', exe),
-      path.join(os.homedir(), '.npm', 'bin', exe),
-      // Linux specific paths
-      '/snap/bin/codex',
-      path.join(os.homedir(), '.local', 'bin', 'codex'),
-      '/usr/local/lib/node_modules/.bin/codex',
-      // NVM paths for various Node versions
-      ...this.getNvmPaths(),
-    ];
+    // Strategy 3: Try which/where command
+    const whichCommands = isWindows
+      ? ['where codex']
+      : platform === 'darwin'
+        ? ['/bin/zsh -l -c "which codex"']
+        : [
+            '/bin/bash -l -c "which codex"',
+            '/usr/bin/bash -l -c "which codex"',
+            'bash -l -c "which codex"',
+            'which codex',
+          ];
 
-    for (const p of possiblePaths) {
+    for (const cmd of whichCommands) {
       try {
-        if (fs.existsSync(p)) {
-          this.codexPath = p;
+        const output = execSync(cmd, {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env, PATH: expandedPath },
+        });
+        if (output && output.trim()) {
+          this.codexPath = output.trim().split('\n')[0];
+          console.log(`[Codex] Found via which: ${this.codexPath}`);
           return true;
         }
-      } catch (e) {
-        // Continue checking
+      } catch {
+        // Try next command
       }
     }
 
     // Strategy 4: Try running codex --version directly
-    try {
-      const platform = process.platform;
-      let output: string;
+    const versionCommands = isWindows
+      ? ['codex --version']
+      : platform === 'darwin'
+        ? ['/bin/zsh -l -c "codex --version"']
+        : [
+            'codex --version',
+            '/bin/bash -l -c "codex --version"',
+            '/bin/sh -c "codex --version"',
+          ];
 
-      if (platform === 'darwin') {
-        output = execSync('/bin/zsh -l -c "codex --version"', {
+    for (const cmd of versionCommands) {
+      try {
+        const output = execSync(cmd, {
           encoding: 'utf-8',
           timeout: 10000,
           stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env, PATH: expandedPath },
         });
-      } else if (platform === 'win32') {
-        output = execSync('codex --version', {
-          encoding: 'utf-8',
-          timeout: 10000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-      } else {
-        // Linux: try /bin/bash first, then fallback
-        try {
-          output = execSync('/bin/bash -l -c "codex --version"', {
-            encoding: 'utf-8',
-            timeout: 10000,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
-        } catch {
-          output = execSync('bash -l -c "codex --version" || codex --version', {
-            encoding: 'utf-8',
-            timeout: 10000,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
+        if (output && (output.includes('codex') || output.match(/\d+\.\d+/))) {
+          this.codexPath = 'codex';
+          console.log(`[Codex] Found via version command`);
+          return true;
         }
+      } catch {
+        // Try next command
       }
-
-      if (output && output.includes('codex')) {
-        this.codexPath = 'codex';
-        return true;
-      }
-    } catch (e) {
-      // Strategy 4 failed
     }
 
+    console.log(`[Codex] Not found after all strategies`);
     return false;
   }
 
