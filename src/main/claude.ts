@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -130,27 +130,67 @@ export class ClaudeManager {
   }
 
   async isInstalled(): Promise<boolean> {
-    // Ensure async path finding is complete first
-    if (this.claudePath === 'claude') {
-      await this.findClaudePathAsync();
-    }
-
     try {
-      await this.runRawCommand(['--version']);
-      return true;
+      const platform = process.platform;
+      let output: string;
+
+      if (platform === 'darwin') {
+        // Use login shell on macOS to get proper PATH
+        output = execSync('/bin/zsh -l -c "which claude"', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else if (platform === 'win32') {
+        output = execSync('where claude', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else {
+        // Linux
+        output = execSync('/bin/bash -l -c "which claude"', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      }
+
+      if (output && output.trim()) {
+        this.claudePath = output.trim().split('\n')[0];
+        return true;
+      }
+      return false;
     } catch (e) {
       return false;
     }
   }
 
   async getVersion(): Promise<string | null> {
-    // Ensure async path finding is complete first
-    if (this.claudePath === 'claude') {
-      await this.findClaudePathAsync();
-    }
-
     try {
-      const output = await this.runRawCommand(['--version']);
+      const platform = process.platform;
+      let output: string;
+
+      if (platform === 'darwin') {
+        output = execSync('/bin/zsh -l -c "claude --version"', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else if (platform === 'win32') {
+        output = execSync('claude --version', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else {
+        output = execSync('/bin/bash -l -c "claude --version"', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      }
+
       const match = output.match(/(\d+\.\d+\.\d+)/);
       return match ? match[1] : output.trim();
     } catch (e) {
