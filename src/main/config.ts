@@ -12,6 +12,7 @@ export interface AppConfig {
   masterKey: string;
   defaultModel: string;
   autoStart: boolean;
+  allowLocalWithoutAuth: boolean; // Allow localhost access without authentication
 
   // Codex
   codexAuthenticated: boolean;
@@ -37,6 +38,7 @@ const defaults: AppConfig = {
   masterKey: '',
   defaultModel: 'gpt-5.2-codex',
   autoStart: true,
+  allowLocalWithoutAuth: true, // Default: allow localhost without auth
   codexAuthenticated: false,
   codexAuthMethod: null,
   claudeAuthenticated: false,
@@ -88,6 +90,7 @@ class ConfigManager {
       port: this.get('port'),
       masterKey: this.get('masterKey'),
       defaultModel: this.get('defaultModel'),
+      allowLocalWithoutAuth: this.get('allowLocalWithoutAuth'),
     };
   }
   
