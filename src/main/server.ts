@@ -9,6 +9,7 @@ import { codexManager } from './codex';
 import { claudeManager } from './claude';
 import { tunnelManager } from './tunnel';
 import { getProvider, getModelInfo, runWithHistory, runWithHistoryStream, getAllModels, Provider } from './model-router';
+import { logManager } from './logger';
 
 let server: any = null;
 let db: Database.Database | null = null;
@@ -88,6 +89,52 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
     // Request ID
     app.use((req, res, next) => {
       res.setHeader('X-Request-Id', uuidv4());
+      next();
+    });
+
+    // Logging middleware - log all API requests
+    app.use((req, res, next) => {
+      const startTime = Date.now();
+      const requestId = res.getHeader('X-Request-Id') as string;
+
+      // Skip logging for static files and admin UI
+      if (req.path === '/admin' || req.path.startsWith('/admin/') && !req.path.startsWith('/admin/')) {
+        return next();
+      }
+
+      // Log request start
+      if (req.path.startsWith('/v1/')) {
+        logManager.info('api', `${req.method} ${req.path}`, {
+          requestId,
+          ip: req.ip || req.socket.remoteAddress,
+          model: req.body?.model,
+        });
+      }
+
+      // Capture response
+      const originalSend = res.send;
+      res.send = function(body: any) {
+        const duration = Date.now() - startTime;
+
+        if (req.path.startsWith('/v1/')) {
+          if (res.statusCode >= 400) {
+            logManager.error('api', `${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`, {
+              requestId,
+              statusCode: res.statusCode,
+              duration,
+            });
+          } else {
+            logManager.success('api', `${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`, {
+              requestId,
+              statusCode: res.statusCode,
+              duration,
+            });
+          }
+        }
+
+        return originalSend.call(this, body);
+      };
+
       next();
     });
 
@@ -766,11 +813,47 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
         total_requests_today: 0,
       });
     });
-    
+
+    // ========================================
+    // Logs API
+    // ========================================
+
+    app.get('/admin/logs', authMiddleware, (req, res) => {
+      const limit = parseInt(req.query.limit as string) || 100;
+      const since = parseInt(req.query.since as string) || 0;
+      const type = req.query.type as string;
+      const category = req.query.category as string;
+
+      const logs = logManager.getLogs({
+        limit,
+        since,
+        type: type as any,
+        category: category as any,
+      });
+
+      res.json({
+        object: 'list',
+        data: logs.map(log => ({
+          id: log.id,
+          timestamp: log.timestamp.toISOString(),
+          type: log.type,
+          category: log.category,
+          message: log.message,
+          details: log.details,
+        })),
+        latest_id: logManager.getLatestId(),
+      });
+    });
+
+    app.delete('/admin/logs', authMiddleware, (req, res) => {
+      logManager.clear();
+      res.json({ success: true, message: 'Logs cleared' });
+    });
+
     // ========================================
     // Tunnel API
     // ========================================
-    
+
     app.get('/admin/tunnel/status', authMiddleware, (req, res) => {
       res.json(tunnelManager.getStatus());
     });
@@ -839,6 +922,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
     
     server = app.listen(port, '0.0.0.0', () => {
       console.log(`Server running at http://localhost:${port}`);
+      logManager.success('system', `Server started on port ${port}`);
       resolve({ running: true, port, url: `http://localhost:${port}` });
     });
     
