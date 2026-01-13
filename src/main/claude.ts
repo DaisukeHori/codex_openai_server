@@ -240,139 +240,139 @@ export class ClaudeManager {
   }
 
   async isInstalled(): Promise<boolean> {
-    // Strategy 1: Try which/where command with login shell
-    try {
-      const platform = process.platform;
-      let output: string;
+    const platform = process.platform;
+    const isWindows = platform === 'win32';
+    const exe = isWindows ? 'claude.cmd' : 'claude';
+    const home = os.homedir();
 
-      if (platform === 'darwin') {
-        output = execSync('/bin/zsh -l -c "which claude"', {
-          encoding: 'utf-8',
-          timeout: 5000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-      } else if (platform === 'win32') {
-        output = execSync('where claude', {
-          encoding: 'utf-8',
-          timeout: 5000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-      } else {
-        // Linux: try /bin/bash first, then fallback
-        try {
-          output = execSync('/bin/bash -l -c "which claude"', {
-            encoding: 'utf-8',
-            timeout: 5000,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
-        } catch {
-          output = execSync('bash -l -c "which claude" || which claude', {
-            encoding: 'utf-8',
-            timeout: 5000,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
+    // Build expanded PATH for searching
+    const extraPaths = [
+      path.join(home, '.local', 'bin'),
+      path.join(home, '.npm-global', 'bin'),
+      path.join(home, '.npm', 'bin'),
+      path.join(home, '.volta', 'bin'),
+      path.join(home, '.yarn', 'bin'),
+      '/usr/local/bin',
+      '/usr/bin',
+      '/opt/homebrew/bin',
+    ];
+    const expandedPath = [...extraPaths, process.env.PATH].filter(Boolean).join(path.delimiter);
+
+    // Strategy 1: Check hardcoded paths first (fastest, no subprocess)
+    const possiblePaths = [
+      // Common Unix paths
+      '/usr/local/bin/claude',
+      '/usr/bin/claude',
+      '/opt/homebrew/bin/claude',
+      // User local paths (common for npm -g on Linux without sudo)
+      path.join(home, '.local', 'bin', 'claude'),
+      // npm global paths
+      path.join(home, '.npm-global', 'bin', exe),
+      path.join(home, '.npm', 'bin', exe),
+      path.join(home, 'npm-global', 'bin', exe),
+      // volta
+      path.join(home, '.volta', 'bin', 'claude'),
+      // yarn global
+      path.join(home, '.yarn', 'bin', 'claude'),
+      path.join(home, '.config', 'yarn', 'global', 'node_modules', '.bin', 'claude'),
+      // pnpm global
+      path.join(home, '.local', 'share', 'pnpm', 'claude'),
+      // snap
+      '/snap/bin/claude',
+      // Windows paths
+      path.join(process.env.APPDATA || '', 'npm', 'claude.cmd'),
+      path.join(process.env.LOCALAPPDATA || '', 'npm', 'claude.cmd'),
+      // NVM paths
+      ...this.getNvmPaths(),
+    ];
+
+    for (const p of possiblePaths) {
+      try {
+        if (p && fs.existsSync(p)) {
+          this.claudePath = p;
+          console.log(`[Claude] Found at: ${p}`);
+          return true;
         }
+      } catch {
+        // Continue
       }
-
-      if (output && output.trim()) {
-        this.claudePath = output.trim().split('\n')[0];
-        return true;
-      }
-    } catch (e) {
-      // Strategy 1 failed, try other methods
     }
 
     // Strategy 2: Check npm global bin directory
     try {
       const npmBin = this.getNpmGlobalBin();
       if (npmBin) {
-        const claudeInNpm = path.join(npmBin, process.platform === 'win32' ? 'claude.cmd' : 'claude');
+        const claudeInNpm = path.join(npmBin, exe);
         if (fs.existsSync(claudeInNpm)) {
           this.claudePath = claudeInNpm;
+          console.log(`[Claude] Found via npm bin: ${claudeInNpm}`);
           return true;
         }
       }
-    } catch (e) {
-      // Strategy 2 failed
+    } catch {
+      // Continue
     }
 
-    // Strategy 3: Check hardcoded paths
-    const isWindows = process.platform === 'win32';
-    const exe = isWindows ? 'claude.cmd' : 'claude';
-    const possiblePaths = [
-      // Common Unix paths
-      '/usr/local/bin/claude',
-      '/usr/bin/claude',
-      '/opt/node22/bin/claude',
-      '/opt/homebrew/bin/claude',
-      // Windows paths
-      path.join(process.env.APPDATA || '', 'npm', 'claude.cmd'),
-      path.join(process.env.LOCALAPPDATA || '', 'npm', 'claude.cmd'),
-      path.join(process.env.PROGRAMFILES || '', 'nodejs', 'claude.cmd'),
-      // Cross-platform npm global paths
-      path.join(os.homedir(), '.npm-global', 'bin', exe),
-      path.join(os.homedir(), '.npm', 'bin', exe),
-      // Linux specific paths
-      '/snap/bin/claude',
-      path.join(os.homedir(), '.local', 'bin', 'claude'),
-      '/usr/local/lib/node_modules/.bin/claude',
-      // NVM paths for various Node versions
-      ...this.getNvmPaths(),
-    ];
+    // Strategy 3: Try which/where command
+    const whichCommands = isWindows
+      ? ['where claude']
+      : platform === 'darwin'
+        ? ['/bin/zsh -l -c "which claude"']
+        : [
+            '/bin/bash -l -c "which claude"',
+            '/usr/bin/bash -l -c "which claude"',
+            'bash -l -c "which claude"',
+            'which claude',
+          ];
 
-    for (const p of possiblePaths) {
+    for (const cmd of whichCommands) {
       try {
-        if (fs.existsSync(p)) {
-          this.claudePath = p;
+        const output = execSync(cmd, {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env, PATH: expandedPath },
+        });
+        if (output && output.trim()) {
+          this.claudePath = output.trim().split('\n')[0];
+          console.log(`[Claude] Found via which: ${this.claudePath}`);
           return true;
         }
-      } catch (e) {
-        // Continue checking
+      } catch {
+        // Try next command
       }
     }
 
     // Strategy 4: Try running claude --version directly
-    try {
-      const platform = process.platform;
-      let output: string;
+    const versionCommands = isWindows
+      ? ['claude --version']
+      : platform === 'darwin'
+        ? ['/bin/zsh -l -c "claude --version"']
+        : [
+            'claude --version',
+            '/bin/bash -l -c "claude --version"',
+            '/bin/sh -c "claude --version"',
+          ];
 
-      if (platform === 'darwin') {
-        output = execSync('/bin/zsh -l -c "claude --version"', {
+    for (const cmd of versionCommands) {
+      try {
+        const output = execSync(cmd, {
           encoding: 'utf-8',
           timeout: 10000,
           stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env, PATH: expandedPath },
         });
-      } else if (platform === 'win32') {
-        output = execSync('claude --version', {
-          encoding: 'utf-8',
-          timeout: 10000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-      } else {
-        // Linux: try /bin/bash first, then fallback
-        try {
-          output = execSync('/bin/bash -l -c "claude --version"', {
-            encoding: 'utf-8',
-            timeout: 10000,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
-        } catch {
-          output = execSync('bash -l -c "claude --version" || claude --version', {
-            encoding: 'utf-8',
-            timeout: 10000,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
+        if (output && (output.includes('claude') || output.match(/\d+\.\d+/))) {
+          this.claudePath = 'claude';
+          console.log(`[Claude] Found via version command`);
+          return true;
         }
+      } catch {
+        // Try next command
       }
-
-      if (output && output.includes('claude')) {
-        this.claudePath = 'claude';
-        return true;
-      }
-    } catch (e) {
-      // Strategy 4 failed
     }
 
+    console.log(`[Claude] Not found after all strategies`);
     return false;
   }
 
