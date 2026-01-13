@@ -1,4 +1,4 @@
-import { spawn, ChildProcess, SpawnOptions } from 'child_process';
+import { spawn, ChildProcess, SpawnOptions, execSync } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
@@ -105,27 +105,67 @@ class CodexManager {
   }
 
   async isInstalled(): Promise<boolean> {
-    // Ensure async path finding is complete first
-    if (this.codexPath === 'codex') {
-      await this.findCodexPathAsync();
-    }
-
     try {
-      await this.runCommand(['--version']);
-      return true;
+      const platform = process.platform;
+      let output: string;
+
+      if (platform === 'darwin') {
+        // Use login shell on macOS to get proper PATH
+        output = execSync('/bin/zsh -l -c "which codex"', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else if (platform === 'win32') {
+        output = execSync('where codex', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else {
+        // Linux
+        output = execSync('/bin/bash -l -c "which codex"', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      }
+
+      if (output && output.trim()) {
+        this.codexPath = output.trim().split('\n')[0];
+        return true;
+      }
+      return false;
     } catch (e) {
       return false;
     }
   }
 
   async getVersion(): Promise<string | null> {
-    // Ensure async path finding is complete first
-    if (this.codexPath === 'codex') {
-      await this.findCodexPathAsync();
-    }
-
     try {
-      const output = await this.runCommand(['--version']);
+      const platform = process.platform;
+      let output: string;
+
+      if (platform === 'darwin') {
+        output = execSync('/bin/zsh -l -c "codex --version"', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else if (platform === 'win32') {
+        output = execSync('codex --version', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else {
+        output = execSync('/bin/bash -l -c "codex --version"', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      }
+
       const match = output.match(/(\d+\.\d+\.\d+)/);
       return match ? match[1] : output.trim();
     } catch (e) {
