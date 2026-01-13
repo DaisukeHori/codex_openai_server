@@ -48,6 +48,63 @@ export class ClaudeManager {
     this.findClaudePath();
   }
 
+  // Get possible NVM paths for various Node versions
+  private getNvmPaths(): string[] {
+    const nvmDir = path.join(os.homedir(), '.nvm', 'versions', 'node');
+    const paths: string[] = [];
+    try {
+      if (fs.existsSync(nvmDir)) {
+        const versions = fs.readdirSync(nvmDir);
+        for (const version of versions) {
+          paths.push(path.join(nvmDir, version, 'bin', 'claude'));
+        }
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+    return paths;
+  }
+
+  // Get npm global bin directory using npm command
+  private getNpmGlobalBin(): string | null {
+    try {
+      const platform = process.platform;
+      let output: string;
+
+      if (platform === 'darwin') {
+        output = execSync('/bin/zsh -l -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null"', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else if (platform === 'win32') {
+        output = execSync('npm bin -g 2>nul || npm config get prefix 2>nul', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else {
+        output = execSync('/bin/bash -l -c "npm bin -g 2>/dev/null || npm config get prefix 2>/dev/null"', {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      }
+
+      if (output && output.trim()) {
+        const binPath = output.trim().split('\n')[0];
+        // If it's a prefix, append /bin
+        if (!binPath.endsWith('/bin') && !binPath.endsWith('\\bin')) {
+          return path.join(binPath, 'bin');
+        }
+        return binPath;
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+    return null;
+  }
+
   private findClaudePath(): void {
     const possiblePaths = [
       '/usr/local/bin/claude',
@@ -57,6 +114,12 @@ export class ClaudeManager {
       path.join(process.env.LOCALAPPDATA || '', 'npm', 'claude.cmd'),
       path.join(os.homedir(), '.npm-global', 'bin', 'claude'),
       path.join(os.homedir(), '.nvm', 'versions', 'node', 'v22.0.0', 'bin', 'claude'),
+      // Additional common npm global paths for macOS
+      path.join(os.homedir(), '.npm', 'bin', 'claude'),
+      '/opt/homebrew/bin/claude',
+      '/usr/local/lib/node_modules/.bin/claude',
+      // NVM paths for various Node versions
+      ...this.getNvmPaths(),
     ];
 
     // First check hardcoded paths
@@ -69,6 +132,20 @@ export class ClaudeManager {
       } catch (e) {
         // Continue checking
       }
+    }
+
+    // Try npm global bin directory
+    try {
+      const npmBin = this.getNpmGlobalBin();
+      if (npmBin) {
+        const claudeInNpm = path.join(npmBin, process.platform === 'win32' ? 'claude.cmd' : 'claude');
+        if (fs.existsSync(claudeInNpm)) {
+          this.claudePath = claudeInNpm;
+          return;
+        }
+      }
+    } catch (e) {
+      // Continue
     }
 
     // If not found, try to find via 'which' command using login shell
@@ -130,12 +207,12 @@ export class ClaudeManager {
   }
 
   async isInstalled(): Promise<boolean> {
+    // Strategy 1: Try which/where command with login shell
     try {
       const platform = process.platform;
       let output: string;
 
       if (platform === 'darwin') {
-        // Use login shell on macOS to get proper PATH
         output = execSync('/bin/zsh -l -c "which claude"', {
           encoding: 'utf-8',
           timeout: 5000,
@@ -148,7 +225,6 @@ export class ClaudeManager {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else {
-        // Linux
         output = execSync('/bin/bash -l -c "which claude"', {
           encoding: 'utf-8',
           timeout: 5000,
@@ -160,10 +236,83 @@ export class ClaudeManager {
         this.claudePath = output.trim().split('\n')[0];
         return true;
       }
-      return false;
     } catch (e) {
-      return false;
+      // Strategy 1 failed, try other methods
     }
+
+    // Strategy 2: Check npm global bin directory
+    try {
+      const npmBin = this.getNpmGlobalBin();
+      if (npmBin) {
+        const claudeInNpm = path.join(npmBin, process.platform === 'win32' ? 'claude.cmd' : 'claude');
+        if (fs.existsSync(claudeInNpm)) {
+          this.claudePath = claudeInNpm;
+          return true;
+        }
+      }
+    } catch (e) {
+      // Strategy 2 failed
+    }
+
+    // Strategy 3: Check hardcoded paths
+    const possiblePaths = [
+      '/usr/local/bin/claude',
+      '/usr/bin/claude',
+      '/opt/node22/bin/claude',
+      '/opt/homebrew/bin/claude',
+      path.join(process.env.APPDATA || '', 'npm', 'claude.cmd'),
+      path.join(process.env.LOCALAPPDATA || '', 'npm', 'claude.cmd'),
+      path.join(os.homedir(), '.npm-global', 'bin', 'claude'),
+      path.join(os.homedir(), '.npm', 'bin', 'claude'),
+      '/usr/local/lib/node_modules/.bin/claude',
+      ...this.getNvmPaths(),
+    ];
+
+    for (const p of possiblePaths) {
+      try {
+        if (fs.existsSync(p)) {
+          this.claudePath = p;
+          return true;
+        }
+      } catch (e) {
+        // Continue checking
+      }
+    }
+
+    // Strategy 4: Try running claude --version directly
+    try {
+      const platform = process.platform;
+      let output: string;
+
+      if (platform === 'darwin') {
+        output = execSync('/bin/zsh -l -c "claude --version"', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else if (platform === 'win32') {
+        output = execSync('claude --version', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else {
+        output = execSync('/bin/bash -l -c "claude --version"', {
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      }
+
+      if (output && output.includes('claude')) {
+        this.claudePath = 'claude';
+        return true;
+      }
+    } catch (e) {
+      // Strategy 4 failed
+    }
+
+    return false;
   }
 
   async getVersion(): Promise<string | null> {
