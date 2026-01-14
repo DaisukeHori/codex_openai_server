@@ -352,9 +352,9 @@ ipcMain.handle('claude:install', async (event) => {
 
 // Server
 ipcMain.handle('server:start', async () => {
-  const config = configManager.getServerConfig();
+  const port = configManager.get('port');
   try {
-    return await startServer(config.port, config.masterKey, config.allowLocalWithoutAuth);
+    return await startServer(port);
   } catch (error) {
     return { running: false, error: error instanceof Error ? error.message : 'Failed to start' };
   }
@@ -443,9 +443,9 @@ ipcMain.handle('onboarding:complete', async () => {
   codexManager.clearCache();
 
   // Start server immediately after onboarding
-  const config = configManager.getServerConfig();
+  const port = configManager.get('port');
   try {
-    await startServer(config.port, config.masterKey, config.allowLocalWithoutAuth);
+    await startServer(port);
     console.log('Server started after onboarding');
   } catch (error) {
     console.error('Failed to start server after onboarding:', error);
@@ -504,14 +504,14 @@ app.whenReady().then(async () => {
   
   // Auto-start server if onboarding is complete
   if (configManager.isOnboardingComplete() && configManager.get('autoStart')) {
-    const config = configManager.getServerConfig();
+    const port = configManager.get('port');
     try {
-      await startServer(config.port, config.masterKey, config.allowLocalWithoutAuth);
+      await startServer(port);
       console.log('Server auto-started');
-      
+
       // Auto-start tunnel if configured
       if (configManager.get('tunnelAutoStart')) {
-        tunnelManager.setPort(config.port);
+        tunnelManager.setPort(port);
         await tunnelManager.start();
         console.log('Tunnel auto-started');
       }

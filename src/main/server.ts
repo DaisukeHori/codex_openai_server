@@ -69,7 +69,7 @@ function initDatabase(dbPath: string) {
   return db;
 }
 
-export function startServer(port: number, masterKey: string, allowLocalWithoutAuth: boolean = true): Promise<ServerStatus> {
+export function startServer(port: number): Promise<ServerStatus> {
   return new Promise((resolve, reject) => {
     if (server) {
       resolve({ running: true, port, url: `http://localhost:${port}` });
@@ -138,61 +138,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       next();
     });
 
-    // Helper to check if request is from localhost
-    const isLocalRequest = (req: Request): boolean => {
-      const ip = req.ip || req.socket.remoteAddress || '';
-      // Check for IPv4 localhost, IPv6 localhost, and loopback addresses
-      return ip === '127.0.0.1' ||
-             ip === '::1' ||
-             ip === '::ffff:127.0.0.1' ||
-             ip === 'localhost' ||
-             ip.startsWith('::ffff:127.');
-    };
-
-    // Auth middleware
-    const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-      // Skip auth if no master key is set
-      if (!masterKey) {
-        next();
-        return;
-      }
-
-      // Skip auth for localhost if allowed
-      if (allowLocalWithoutAuth && isLocalRequest(req)) {
-        next();
-        return;
-      }
-
-      const authHeader = req.headers.authorization;
-      if (!authHeader) {
-        res.status(401).json({ error: { message: 'Missing Authorization header' } });
-        return;
-      }
-
-      const token = authHeader.replace('Bearer ', '');
-      if (token !== masterKey) {
-        // Check API keys in database
-        const stmt = db!.prepare('SELECT * FROM api_keys WHERE key_hash = ? AND is_active = 1');
-        const apiKey = stmt.get(hashKey(token));
-        if (!apiKey) {
-          res.status(401).json({ error: { message: 'Invalid API key' } });
-          return;
-        }
-      }
-
-      next();
-    };
-    
-    // Simple hash function for API keys
-    function hashKey(key: string): string {
-      let hash = 0;
-      for (let i = 0; i < key.length; i++) {
-        const char = key.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-      }
-      return 'h_' + Math.abs(hash).toString(36);
-    }
+    // No authentication required for local app
     
     // ========================================
     // API Documentation
@@ -432,7 +378,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       return history;
     }
 
-    app.post('/v1/responses', authMiddleware, async (req, res) => {
+    app.post('/v1/responses', async (req, res) => {
       const {
         model = configManager.get('defaultModel'),
         input,
@@ -604,7 +550,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       }
     });
     
-    app.get('/v1/responses', authMiddleware, (req, res) => {
+    app.get('/v1/responses', (req, res) => {
       const limit = parseInt(req.query.limit as string) || 20;
       const rows = db!.prepare('SELECT * FROM responses ORDER BY created_at DESC LIMIT ?').all(limit);
 
@@ -624,7 +570,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       });
     });
 
-    app.get('/v1/responses/:id', authMiddleware, (req, res) => {
+    app.get('/v1/responses/:id', (req, res) => {
       const row = db!.prepare('SELECT * FROM responses WHERE id = ?').get(req.params.id) as any;
       if (!row) {
         res.status(404).json({ error: { message: 'Response not found' } });
@@ -646,7 +592,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       });
     });
     
-    app.delete('/v1/responses/:id', authMiddleware, (req, res) => {
+    app.delete('/v1/responses/:id', (req, res) => {
       const result = db!.prepare('DELETE FROM responses WHERE id = ?').run(req.params.id);
       if (result.changes === 0) {
         res.status(404).json({ error: { message: 'Response not found' } });
@@ -659,7 +605,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
     // Chat Completions API
     // ========================================
 
-    app.post('/v1/chat/completions', authMiddleware, async (req, res) => {
+    app.post('/v1/chat/completions', async (req, res) => {
       const { model = configManager.get('defaultModel'), messages } = req.body;
 
       if (!messages || !Array.isArray(messages)) {
@@ -708,7 +654,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
     // API Keys Management
     // ========================================
     
-    app.post('/v1/api-keys', authMiddleware, (req, res) => {
+    app.post('/v1/api-keys', (req, res) => {
       const { name, scopes = ['responses', 'chat'], expires_in_days, rate_limit } = req.body;
       
       if (!name) {
@@ -743,7 +689,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       });
     });
     
-    app.get('/v1/api-keys', authMiddleware, (req, res) => {
+    app.get('/v1/api-keys', (req, res) => {
       const includeInactive = req.query.include_inactive === 'true';
       const query = includeInactive
         ? 'SELECT * FROM api_keys ORDER BY created_at DESC'
@@ -768,7 +714,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       });
     });
     
-    app.get('/v1/api-keys/:id', authMiddleware, (req, res) => {
+    app.get('/v1/api-keys/:id', (req, res) => {
       const row = db!.prepare('SELECT * FROM api_keys WHERE id = ?').get(req.params.id) as any;
       if (!row) {
         res.status(404).json({ error: { message: 'API key not found' } });
@@ -789,7 +735,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       });
     });
     
-    app.post('/v1/api-keys/:id/revoke', authMiddleware, (req, res) => {
+    app.post('/v1/api-keys/:id/revoke', (req, res) => {
       const result = db!.prepare('UPDATE api_keys SET is_active = 0 WHERE id = ?').run(req.params.id);
       if (result.changes === 0) {
         res.status(404).json({ error: { message: 'API key not found' } });
@@ -798,7 +744,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       res.json({ id: req.params.id, is_active: false, message: 'Key revoked' });
     });
     
-    app.delete('/v1/api-keys/:id', authMiddleware, (req, res) => {
+    app.delete('/v1/api-keys/:id', (req, res) => {
       const result = db!.prepare('DELETE FROM api_keys WHERE id = ?').run(req.params.id);
       if (result.changes === 0) {
         res.status(404).json({ error: { message: 'API key not found' } });
@@ -807,7 +753,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       res.json({ id: req.params.id, deleted: true });
     });
     
-    app.get('/v1/api-keys-stats', authMiddleware, (req, res) => {
+    app.get('/v1/api-keys-stats', (req, res) => {
       const total = db!.prepare('SELECT COUNT(*) as count FROM api_keys').get() as any;
       const active = db!.prepare('SELECT COUNT(*) as count FROM api_keys WHERE is_active = 1').get() as any;
       
@@ -822,7 +768,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
     // Logs API
     // ========================================
 
-    app.get('/admin/logs', authMiddleware, (req, res) => {
+    app.get('/admin/logs', (req, res) => {
       const limit = parseInt(req.query.limit as string) || 100;
       const since = parseInt(req.query.since as string) || 0;
       const type = req.query.type as string;
@@ -849,7 +795,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       });
     });
 
-    app.delete('/admin/logs', authMiddleware, (req, res) => {
+    app.delete('/admin/logs', (req, res) => {
       logManager.clear();
       res.json({ success: true, message: 'Logs cleared' });
     });
@@ -858,11 +804,11 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
     // Tunnel API
     // ========================================
 
-    app.get('/admin/tunnel/status', authMiddleware, (req, res) => {
+    app.get('/admin/tunnel/status', (req, res) => {
       res.json(tunnelManager.getStatus());
     });
     
-    app.post('/admin/tunnel/start', authMiddleware, async (req, res) => {
+    app.post('/admin/tunnel/start', async (req, res) => {
       try {
         tunnelManager.setPort(port);
         const status = await tunnelManager.start();
@@ -872,7 +818,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       }
     });
     
-    app.post('/admin/tunnel/stop', authMiddleware, (req, res) => {
+    app.post('/admin/tunnel/stop', (req, res) => {
       tunnelManager.stop();
       res.json({ success: true });
     });
@@ -881,7 +827,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
     // Config API
     // ========================================
     
-    app.get('/admin/config', authMiddleware, (req, res) => {
+    app.get('/admin/config', (req, res) => {
       res.json({
         port: configManager.get('port'),
         defaultModel: configManager.get('defaultModel'),
@@ -889,7 +835,7 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       });
     });
 
-    app.patch('/admin/config', authMiddleware, (req, res) => {
+    app.patch('/admin/config', (req, res) => {
       const { port, defaultModel } = req.body;
       let requiresRestart = false;
 

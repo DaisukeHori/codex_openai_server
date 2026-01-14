@@ -413,14 +413,10 @@
         </div>
         <div class="nav-item" data-step="3">
           <span class="nav-num">3</span>
-          <span>マスターキー</span>
+          <span>ポート設定</span>
         </div>
         <div class="nav-item" data-step="4">
           <span class="nav-num">4</span>
-          <span>ポート設定</span>
-        </div>
-        <div class="nav-item" data-step="5">
-          <span class="nav-num">5</span>
           <span>完了</span>
         </div>
       </nav>
@@ -541,31 +537,9 @@
           <button class="btn btn-primary" onclick="goToStep(3)" id="step2-next" disabled>次へ</button>
         </div>
       </div>
-      
-      <!-- Step 3 -->
+
+      <!-- Step 3: Port Settings -->
       <div class="step" data-step="3">
-        <div class="header">
-          <h1>マスターキー</h1>
-          <p>管理用のマスターキーを生成します</p>
-        </div>
-        <div class="body">
-          <div class="form-group">
-            <label class="form-label">マスターキー</label>
-            <div class="input-row">
-              <input type="text" class="form-input" id="master-key" readonly placeholder="生成ボタンを押してください">
-              <button class="btn btn-secondary" onclick="generateKey()">生成</button>
-            </div>
-            <p class="form-hint">このキーは管理操作に必要です。安全に保管してください。</p>
-          </div>
-        </div>
-        <div class="footer">
-          <button class="btn btn-secondary" onclick="goToStep(2)">戻る</button>
-          <button class="btn btn-primary" onclick="goToStep(4)" id="step3-next" disabled>次へ</button>
-        </div>
-      </div>
-      
-      <!-- Step 4 -->
-      <div class="step" data-step="4">
         <div class="header">
           <h1>ポート設定</h1>
           <p>サーバーが使用するポート番号を指定します</p>
@@ -584,13 +558,13 @@
           </div>
         </div>
         <div class="footer">
-          <button class="btn btn-secondary" onclick="goToStep(3)">戻る</button>
-          <button class="btn btn-primary" onclick="goToStep(5)">次へ</button>
+          <button class="btn btn-secondary" onclick="goToStep(2)">戻る</button>
+          <button class="btn btn-primary" onclick="goToStep(4)">次へ</button>
         </div>
       </div>
-      
-      <!-- Step 5 -->
-      <div class="step" data-step="5">
+
+      <!-- Step 4: Complete -->
+      <div class="step" data-step="4">
         <div class="header">
           <h1>セットアップ完了</h1>
           <p>サーバーを起動する準備ができました</p>
@@ -604,14 +578,10 @@
               <div class="summary-label">ポート</div>
               <div class="summary-value" id="summary-port">8080</div>
             </div>
-            <div class="summary-item">
-              <div class="summary-label">マスターキー</div>
-              <div class="summary-value" id="summary-key">-</div>
-            </div>
           </div>
         </div>
         <div class="footer">
-          <button class="btn btn-secondary" onclick="goToStep(4)">戻る</button>
+          <button class="btn btn-secondary" onclick="goToStep(3)">戻る</button>
           <button class="btn btn-primary" onclick="completeSetup()">サーバーを起動</button>
         </div>
       </div>
@@ -907,42 +877,27 @@
     }
     
     // Key
-    async function generateKey() {
-      const key = await window.electronAPI.generateMasterKey();
-      document.getElementById('master-key').value = key;
-      document.getElementById('step3-next').disabled = false;
-    }
-    
     // Port
     document.getElementById('port').addEventListener('input', function() {
       document.getElementById('access-url').textContent = 'http://localhost:' + this.value;
     });
-    
+
     // Summary
     function updateSummary() {
       document.getElementById('summary-port').textContent = document.getElementById('port').value;
-      const key = document.getElementById('master-key').value;
-      document.getElementById('summary-key').textContent = key ? key.substring(0, 12) + '...' : '-';
     }
-    
+
     // Complete
     async function completeSetup() {
       const port = parseInt(document.getElementById('port').value);
-      const masterKey = document.getElementById('master-key').value;
-      
       await window.electronAPI.setConfig('port', port);
-      await window.electronAPI.setConfig('masterKey', masterKey);
       await window.electronAPI.completeOnboarding();
     }
-    
+
     // Init
     (async () => {
       try {
         const config = await window.electronAPI.getConfig();
-        if (config.masterKey) {
-          document.getElementById('master-key').value = config.masterKey;
-          document.getElementById('step3-next').disabled = false;
-        }
         if (config.port) {
           document.getElementById('port').value = config.port;
           document.getElementById('access-url').textContent = 'http://localhost:' + config.port;

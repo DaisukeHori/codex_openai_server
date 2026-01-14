@@ -384,10 +384,10 @@
     };
 
     // ============================================
-    // API Client
+    // API Client (No authentication required)
     // ============================================
-    const createApi = (baseUrl, masterKey) => {
-      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${masterKey}` };
+    const createApi = (baseUrl) => {
+      const headers = { 'Content-Type': 'application/json' };
       const handle = async (res) => { if (!res.ok) throw new Error(await res.text()); return res.json(); };
       return {
         health: (refresh = false) => fetch(`${baseUrl}/health${refresh ? '?refresh=true' : ''}`).then(handle),
@@ -2237,7 +2237,7 @@
     // ============================================
     // Main Layout
     // ============================================
-    const MainLayout = ({ serverUrl, masterKey, onLogout }) => {
+    const MainLayout = ({ serverUrl, onLogout }) => {
       const [page, setPage] = useState('dashboard');
       const [toast, setToast] = useState(null);
       const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -2247,7 +2247,7 @@
       const [updateInfo, setUpdateInfo] = useState(null);
       const { dark, toggle } = useTheme();
 
-      const api = useMemo(() => createApi(serverUrl, masterKey), [serverUrl, masterKey]);
+      const api = useMemo(() => createApi(serverUrl), [serverUrl]);
       const showToast = useCallback((msg, type = 'info') => setToast({ message: msg, type }), []);
 
       // Listen for update events from Electron
@@ -2391,16 +2391,41 @@
     };
 
     // ============================================
-    // App
+    // App (No login required for local app)
     // ============================================
     const App = () => {
-      const [auth, setAuth] = useState(() => { const s = sessionStorage.getItem('codex_admin_auth'); return s ? JSON.parse(s) : null; });
-      const login = (url, key) => { const d = { serverUrl: url, masterKey: key }; sessionStorage.setItem('codex_admin_auth', JSON.stringify(d)); setAuth(d); };
-      const logout = () => { sessionStorage.removeItem('codex_admin_auth'); setAuth(null); };
-      
+      const [serverUrl, setServerUrl] = useState('http://localhost:8080');
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        const init = async () => {
+          try {
+            if (window.electronAPI) {
+              const url = await window.electronAPI.getServerUrl();
+              if (url) setServerUrl(url);
+            }
+          } catch (e) {
+            console.error('Failed to get server URL:', e);
+          } finally {
+            setLoading(false);
+          }
+        };
+        init();
+      }, []);
+
+      if (loading) {
+        return (
+          <ThemeProvider>
+            <div className="min-h-screen flex items-center justify-center">
+              <Spinner size="lg" />
+            </div>
+          </ThemeProvider>
+        );
+      }
+
       return (
         <ThemeProvider>
-          {auth ? <MainLayout serverUrl={auth.serverUrl} masterKey={auth.masterKey} onLogout={logout} /> : <LoginPage onLogin={login} />}
+          <MainLayout serverUrl={serverUrl} onLogout={() => window.electronAPI?.closeWindow()} />
         </ThemeProvider>
       );
     };
