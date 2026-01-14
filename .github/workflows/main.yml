@@ -150,11 +150,14 @@ jobs:
 
           if [ -z "$PREV_TAG" ]; then
             # タグがない場合は最新10件のコミット
-            CHANGELOG=$(git log --oneline -10 --pretty=format:"- %s")
+            COMMITS=$(git log --oneline -10 --pretty=format:"%s")
           else
             # 前回のタグからの変更を取得
-            CHANGELOG=$(git log ${PREV_TAG}..HEAD --oneline --pretty=format:"- %s")
+            COMMITS=$(git log ${PREV_TAG}..HEAD --oneline --pretty=format:"%s")
           fi
+
+          # Auto-mergeなどのボットコミットをフィルタ
+          CHANGELOG=$(echo "$COMMITS" | grep -v "^Auto-merge" | grep -v "^Merge" | head -20 | sed 's/^/- /')
 
           # 空の場合のデフォルト
           if [ -z "$CHANGELOG" ]; then
