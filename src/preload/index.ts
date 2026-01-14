@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   getUpdateStatus: () => ipcRenderer.invoke('update:status'),
+  downloadDMG: (url: string) => ipcRenderer.invoke('update:downloadDMG', url),
   onUpdateStatus: (callback: (status: any) => void) => {
     ipcRenderer.on('update:status', (_, status) => callback(status));
   },
@@ -93,6 +94,7 @@ declare global {
       downloadUpdate: () => Promise<void>;
       installUpdate: () => Promise<void>;
       getUpdateStatus: () => Promise<any>;
+      downloadDMG: (url: string) => Promise<{ success: boolean; path?: string; error?: string }>;
       onUpdateStatus: (callback: (status: any) => void) => void;
       onUpdateAvailable: (callback: (info: any) => void) => void;
       onUpdateDownloaded: (callback: (info: any) => void) => void;

@@ -388,6 +388,52 @@ ipcMain.handle('update:status', () => {
   return updateManager.getStatus();
 });
 
+ipcMain.handle('update:downloadDMG', async (_, url: string) => {
+  const https = await import('https');
+  const fs = await import('fs');
+  const os = await import('os');
+  const pathModule = await import('path');
+
+  const downloadsDir = pathModule.join(os.homedir(), 'Downloads');
+  const fileName = url.split('/').pop() || 'update.dmg';
+  const filePath = pathModule.join(downloadsDir, fileName);
+
+  return new Promise((resolve) => {
+    const file = fs.createWriteStream(filePath);
+
+    https.get(url, (response) => {
+      // Handle redirect
+      if (response.statusCode === 302 || response.statusCode === 301) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl) {
+          https.get(redirectUrl, (redirectResponse) => {
+            redirectResponse.pipe(file);
+            file.on('finish', () => {
+              file.close();
+              shell.showItemInFolder(filePath);
+              resolve({ success: true, path: filePath });
+            });
+          }).on('error', (err) => {
+            fs.unlink(filePath, () => {});
+            resolve({ success: false, error: err.message });
+          });
+        }
+        return;
+      }
+
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        shell.showItemInFolder(filePath);
+        resolve({ success: true, path: filePath });
+      });
+    }).on('error', (err) => {
+      fs.unlink(filePath, () => {});
+      resolve({ success: false, error: err.message });
+    });
+  });
+});
+
 // Onboarding
 ipcMain.handle('onboarding:complete', () => {
   configManager.completeOnboarding();

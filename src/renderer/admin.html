@@ -2094,6 +2094,10 @@
     // Update Dialog
     // ============================================
     const UpdateDialog = ({ updateInfo, updateStatus, onDownload, onInstall, onClose }) => {
+      const [dmgDownloading, setDmgDownloading] = useState(false);
+      const [dmgDownloaded, setDmgDownloaded] = useState(false);
+      const [dmgError, setDmgError] = useState(null);
+
       const formatBytes = (bytes) => {
         if (!bytes) return '';
         const mb = bytes / (1024 * 1024);
@@ -2104,6 +2108,24 @@
       const dmgUrl = updateInfo?.version
         ? `https://github.com/DaisukeHori/codex_openai_server/releases/download/v${updateInfo.version}/CodexAPIServer-${updateInfo.version}-arm64.dmg`
         : null;
+
+      const handleDMGDownload = async () => {
+        if (!dmgUrl || !window.electronAPI) return;
+        setDmgDownloading(true);
+        setDmgError(null);
+        try {
+          const result = await window.electronAPI.downloadDMG(dmgUrl);
+          if (result.success) {
+            setDmgDownloaded(true);
+          } else {
+            setDmgError(result.error || 'ダウンロードに失敗しました');
+          }
+        } catch (e) {
+          setDmgError(e.message || 'ダウンロードに失敗しました');
+        } finally {
+          setDmgDownloading(false);
+        }
+      };
 
       return (
         <div className="modal-overlay" onClick={onClose}>
@@ -2161,15 +2183,29 @@
                 </div>
               )}
 
+              {dmgError && (
+                <div className="bg-red-50 text-red-600 rounded-lg p-3 mb-4 text-sm">
+                  エラー: {dmgError}
+                </div>
+              )}
+
               <div className="flex gap-3">
                 {isMac ? (
-                  <a
-                    href={dmgUrl}
-                    className="flex-1 btn-primary py-3 flex items-center justify-center gap-2 no-underline"
-                  >
-                    <Icons.Download />
-                    DMGをダウンロード
-                  </a>
+                  dmgDownloaded ? (
+                    <button onClick={onClose} className="flex-1 btn-success py-3 flex items-center justify-center gap-2">
+                      ダウンロード完了（Finderで開きました）
+                    </button>
+                  ) : dmgDownloading ? (
+                    <button disabled className="flex-1 btn-primary py-3 opacity-50 cursor-not-allowed flex items-center justify-center gap-2">
+                      <Spinner size="sm" />
+                      ダウンロード中...
+                    </button>
+                  ) : (
+                    <button onClick={handleDMGDownload} className="flex-1 btn-primary py-3 flex items-center justify-center gap-2">
+                      <Icons.Download />
+                      DMGをダウンロード
+                    </button>
+                  )
                 ) : updateStatus?.downloaded ? (
                   <button onClick={onInstall} className="flex-1 btn-success py-3 flex items-center justify-center gap-2">
                     再起動して更新
