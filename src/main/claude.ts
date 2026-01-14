@@ -576,15 +576,30 @@ export class ClaudeManager {
   async runPrompt(prompt: string, model: string, timeout: number = 120000): Promise<ClaudeResponse> {
     return new Promise((resolve, reject) => {
       const cliModel = this.getCliModel(model);
-      const args = ['-p', prompt, '--model', cliModel, '--output-format', 'json'];
 
       let output = '';
       let errorOutput = '';
+      let proc;
 
-      const proc = spawn(this.claudePath, args, {
-        shell: true,
-        env: { ...process.env },
-      });
+      // Use login shell to get proper PATH (like runRawCommand)
+      const platform = process.platform;
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      const command = `${this.claudePath} -p '${escapedPrompt}' --model ${cliModel} --output-format json`;
+
+      if (platform === 'darwin') {
+        proc = spawn('/bin/zsh', ['-l', '-c', command], {
+          env: { ...process.env },
+        });
+      } else if (platform === 'win32') {
+        proc = spawn(this.claudePath, ['-p', prompt, '--model', cliModel, '--output-format', 'json'], {
+          shell: true,
+          env: { ...process.env },
+        });
+      } else {
+        proc = spawn('/bin/bash', ['-l', '-c', command], {
+          env: { ...process.env },
+        });
+      }
 
       const timer = setTimeout(() => {
         proc.kill();
@@ -660,12 +675,27 @@ export class ClaudeManager {
   ): string {
     const id = `claude_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const cliModel = this.getCliModel(model);
-    const args = ['-p', prompt, '--model', cliModel, '--output-format', 'stream-json'];
+    let proc;
 
-    const proc = spawn(this.claudePath, args, {
-      shell: true,
-      env: { ...process.env },
-    });
+    // Use login shell to get proper PATH (like runRawCommand)
+    const platform = process.platform;
+    const escapedPrompt = prompt.replace(/'/g, "'\\''");
+    const command = `${this.claudePath} -p '${escapedPrompt}' --model ${cliModel} --output-format stream-json`;
+
+    if (platform === 'darwin') {
+      proc = spawn('/bin/zsh', ['-l', '-c', command], {
+        env: { ...process.env },
+      });
+    } else if (platform === 'win32') {
+      proc = spawn(this.claudePath, ['-p', prompt, '--model', cliModel, '--output-format', 'stream-json'], {
+        shell: true,
+        env: { ...process.env },
+      });
+    } else {
+      proc = spawn('/bin/bash', ['-l', '-c', command], {
+        env: { ...process.env },
+      });
+    }
 
     this.activeProcesses.set(id, {
       process: proc,
