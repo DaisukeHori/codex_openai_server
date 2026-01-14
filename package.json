@@ -48,6 +48,7 @@
   "build": {
     "appId": "com.codex.api-server",
     "productName": "Codex API Server",
+    "artifactName": "CodexAPIServer-${version}-${arch}.${ext}",
     "directories": {
       "output": "release"
     },
