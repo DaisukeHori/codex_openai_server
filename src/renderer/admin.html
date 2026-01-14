@@ -1825,6 +1825,32 @@
 
           {/* Auto Update */}
           <UpdateSettingsSection showToast={showToast} />
+
+          {/* System */}
+          <div className="card p-6">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <Icons.Settings />
+              システム
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <span className="font-medium">セットアップウィザード</span>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">初期設定をもう一度やり直す</p>
+                </div>
+                <button
+                  onClick={() => {
+                    if (window.electronAPI && confirm('セットアップウィザードを開始しますか？')) {
+                      window.electronAPI.resetOnboarding();
+                    }
+                  }}
+                  className="btn-secondary px-4 py-2"
+                >
+                  再開する
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       );
     };
