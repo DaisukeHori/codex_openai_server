@@ -66,29 +66,32 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Update package.json version
         run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
+
       - name: Install dependencies
         run: npm install
-      
+
       - name: Build TypeScript
         run: npm run build
-      
+
       - name: Copy renderer files
         run: cp -r src/renderer dist/
-      
-      - name: Build Electron
-        run: npm run dist:mac
+
+      - name: Build Electron for arm64 and x64
+        run: npx electron-builder --mac --arch arm64 --arch x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
+      - name: List build outputs
+        run: ls -la release/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
