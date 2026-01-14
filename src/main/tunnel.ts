@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import https from 'https';
 import { pipeline } from 'stream/promises';
+import { configManager } from './config';
 
 export interface TunnelStatus {
   active: boolean;
@@ -35,6 +36,12 @@ class TunnelManager {
   }
   
   private getCloudflaredPath(): string {
+    // Check custom path first
+    const customPath = configManager.get('customCloudflaredPath');
+    if (customPath && fs.existsSync(customPath)) {
+      return customPath;
+    }
+
     const platform = process.platform;
 
     let binaryName = 'cloudflared';

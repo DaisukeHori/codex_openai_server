@@ -37,6 +37,12 @@ export interface AppConfig {
   updateCheckOnStartup: boolean;
   updateNotifyOnStartup: boolean;
   updateAutoDownload: boolean;
+
+  // Custom Paths (empty = use default)
+  customNpmPath: string;
+  customClaudePath: string;
+  customCodexPath: string;
+  customCloudflaredPath: string;
 }
 
 const defaults: AppConfig = {
@@ -60,6 +66,10 @@ const defaults: AppConfig = {
   updateCheckOnStartup: true,
   updateNotifyOnStartup: true,
   updateAutoDownload: false,
+  customNpmPath: '',
+  customClaudePath: '',
+  customCodexPath: '',
+  customCloudflaredPath: '',
 };
 
 class ConfigManager {

@@ -1497,6 +1497,13 @@
         return saved !== null ? JSON.parse(saved) : true;
       });
       const [portInput, setPortInput] = useState('');
+      const [advancedOpen, setAdvancedOpen] = useState(false);
+      const [customPaths, setCustomPaths] = useState({
+        npm: '',
+        claude: '',
+        codex: '',
+        cloudflared: '',
+      });
       const { dark, toggle } = useTheme();
       const [notifications, setNotifications] = useState({
         rateLimit: true,
@@ -1543,9 +1550,24 @@
               setKillOnClose(cfg.killOnClose);
               localStorage.setItem('killOnClose', JSON.stringify(cfg.killOnClose));
             }
+            // Load custom paths
+            setCustomPaths({
+              npm: cfg?.customNpmPath || '',
+              claude: cfg?.customClaudePath || '',
+              codex: cfg?.customCodexPath || '',
+              cloudflared: cfg?.customCloudflaredPath || '',
+            });
           });
         }
       }, []);
+
+      const handleCustomPathSave = async (key, configKey, value) => {
+        if (window.electronAPI) {
+          await window.electronAPI.setConfig(configKey, value);
+          setCustomPaths(prev => ({ ...prev, [key]: value }));
+          showToast('パスを保存しました。再起動後に適用されます。', 'success');
+        }
+      };
 
       const handleTunnelStart = async () => {
         setTunnelLoading(true);
@@ -2078,6 +2100,59 @@
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Advanced Settings */}
+          <div className="card p-6">
+            <button
+              onClick={() => setAdvancedOpen(!advancedOpen)}
+              className="w-full flex items-center justify-between font-semibold"
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                詳細設定
+              </span>
+              <svg className={`w-5 h-5 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {advancedOpen && (
+              <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-4">
+                <p className="text-sm text-[var(--text-muted)]">
+                  CLIツールのカスタムパスを設定できます。空欄の場合はデフォルトのパスが使用されます。
+                </p>
+
+                {[
+                  { key: 'npm', configKey: 'customNpmPath', label: 'npm', placeholder: '/usr/local/bin/npm' },
+                  { key: 'claude', configKey: 'customClaudePath', label: 'Claude Code', placeholder: '/usr/local/bin/claude' },
+                  { key: 'codex', configKey: 'customCodexPath', label: 'Codex CLI', placeholder: '/usr/local/bin/codex' },
+                  { key: 'cloudflared', configKey: 'customCloudflaredPath', label: 'cloudflared', placeholder: '/usr/local/bin/cloudflared' },
+                ].map(item => (
+                  <div key={item.key} className="space-y-2">
+                    <label className="text-sm font-medium text-[var(--text-secondary)]">{item.label} パス</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customPaths[item.key]}
+                        onChange={(e) => setCustomPaths(prev => ({ ...prev, [item.key]: e.target.value }))}
+                        placeholder={item.placeholder}
+                        className="input-field flex-1"
+                      />
+                      <button
+                        onClick={() => handleCustomPathSave(item.key, item.configKey, customPaths[item.key])}
+                        className="btn-secondary px-3 py-2 text-sm"
+                      >
+                        保存
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       );

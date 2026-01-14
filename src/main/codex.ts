@@ -3,6 +3,7 @@ import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { configManager } from './config';
 
 export interface CodexStatus {
   installed: boolean;
@@ -113,6 +114,13 @@ class CodexManager {
   }
   
   private findCodexPath(): void {
+    // Check custom path first
+    const customPath = configManager.get('customCodexPath');
+    if (customPath && fs.existsSync(customPath)) {
+      this.codexPath = customPath;
+      return;
+    }
+
     const isWindows = process.platform === 'win32';
     const exe = isWindows ? 'codex.cmd' : 'codex';
 
@@ -221,6 +229,14 @@ class CodexManager {
   }
 
   async isInstalled(): Promise<boolean> {
+    // Check custom path first
+    const customPath = configManager.get('customCodexPath');
+    if (customPath && fs.existsSync(customPath)) {
+      this.codexPath = customPath;
+      console.log(`[Codex] Using custom path: ${customPath}`);
+      return true;
+    }
+
     const platform = process.platform;
     const isWindows = platform === 'win32';
     const exe = isWindows ? 'codex.cmd' : 'codex';

@@ -2,6 +2,7 @@ import { spawn, ChildProcess, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { configManager } from './config';
 
 export interface ClaudeStatus {
   installed: boolean;
@@ -137,6 +138,13 @@ export class ClaudeManager {
   }
 
   private findClaudePath(): void {
+    // Check custom path first
+    const customPath = configManager.get('customClaudePath');
+    if (customPath && fs.existsSync(customPath)) {
+      this.claudePath = customPath;
+      return;
+    }
+
     const isWindows = process.platform === 'win32';
     const exe = isWindows ? 'claude.cmd' : 'claude';
 
@@ -249,6 +257,14 @@ export class ClaudeManager {
   }
 
   async isInstalled(): Promise<boolean> {
+    // Check custom path first
+    const customPath = configManager.get('customClaudePath');
+    if (customPath && fs.existsSync(customPath)) {
+      this.claudePath = customPath;
+      console.log(`[Claude] Using custom path: ${customPath}`);
+      return true;
+    }
+
     const platform = process.platform;
     const isWindows = platform === 'win32';
     const exe = isWindows ? 'claude.cmd' : 'claude';
