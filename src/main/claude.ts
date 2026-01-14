@@ -420,10 +420,13 @@ export class ClaudeManager {
   async checkAuth(): Promise<{ authenticated: boolean; method: 'api_key' | 'subscription' | null; message: string }> {
     try {
       // First check if CLI is available and working
+      console.log('[Claude] checkAuth: Running --version with path:', this.claudePath);
       try {
-        await this.runRawCommand(['--version']);
+        const versionOutput = await this.runRawCommand(['--version']);
+        console.log('[Claude] checkAuth: --version succeeded:', versionOutput.trim());
       } catch (cmdError) {
         // CLI command failed
+        console.log('[Claude] checkAuth: --version failed:', cmdError instanceof Error ? cmdError.message : String(cmdError));
         return { authenticated: false, method: null, message: 'Claude Code not working' };
       }
 
@@ -468,6 +471,7 @@ export class ClaudeManager {
 
     console.log('[Claude] Checking status...');
     const installed = await this.isInstalled();
+    console.log('[Claude] isInstalled:', installed, 'claudePath:', this.claudePath);
     if (!installed) {
       const status: ClaudeStatus = {
         installed: false,

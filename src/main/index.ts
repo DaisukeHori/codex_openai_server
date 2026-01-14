@@ -435,14 +435,23 @@ ipcMain.handle('update:downloadDMG', async (_, url: string) => {
 });
 
 // Onboarding
-ipcMain.handle('onboarding:complete', () => {
+ipcMain.handle('onboarding:complete', async () => {
   configManager.completeOnboarding();
 
   // Clear cached status to ensure fresh detection in admin UI
   claudeManager.clearCache();
   codexManager.clearCache();
 
-  // Restart app to load main UI
+  // Start server immediately after onboarding
+  const config = configManager.getServerConfig();
+  try {
+    await startServer(config.port, config.masterKey, config.allowLocalWithoutAuth);
+    console.log('Server started after onboarding');
+  } catch (error) {
+    console.error('Failed to start server after onboarding:', error);
+  }
+
+  // Load main UI
   if (mainWindow) {
     mainWindow.setSize(1200, 800);
     mainWindow.center();
