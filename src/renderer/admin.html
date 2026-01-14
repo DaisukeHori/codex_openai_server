@@ -2074,6 +2074,11 @@
         return `${mb.toFixed(1)} MB`;
       };
 
+      const isMac = navigator.platform.toLowerCase().includes('mac');
+      const releasePageUrl = updateInfo?.version
+        ? `https://github.com/DaisukeHori/codex_openai_server/releases/tag/v${updateInfo.version}`
+        : null;
+
       return (
         <div className="modal-overlay" onClick={onClose}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -2131,7 +2136,17 @@
               )}
 
               <div className="flex gap-3">
-                {updateStatus?.downloaded ? (
+                {isMac ? (
+                  <a
+                    href={releasePageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 btn-primary py-3 flex items-center justify-center gap-2 no-underline"
+                  >
+                    <Icons.Download />
+                    リリースページを開く
+                  </a>
+                ) : updateStatus?.downloaded ? (
                   <button onClick={onInstall} className="flex-1 btn-success py-3 flex items-center justify-center gap-2">
                     再起動して更新
                   </button>
