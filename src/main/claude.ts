@@ -43,9 +43,18 @@ export const CLAUDE_MODELS: Record<string, { cliModel: string; displayName: stri
 export class ClaudeManager {
   private claudePath: string = 'claude';
   private activeProcesses: Map<string, ClaudeProcess> = new Map();
+  private cachedStatus: ClaudeStatus | null = null;
+  private cacheTime: number = 0;
+  private readonly CACHE_TTL = 30000; // 30 seconds cache
 
   constructor() {
     this.findClaudePath();
+  }
+
+  // Clear cached status
+  clearCache(): void {
+    this.cachedStatus = null;
+    this.cacheTime = 0;
   }
 
   // Get possible NVM paths for various Node versions
@@ -449,28 +458,44 @@ export class ClaudeManager {
     }
   }
 
-  async getStatus(): Promise<ClaudeStatus> {
+  async getStatus(forceRefresh: boolean = false): Promise<ClaudeStatus> {
+    // Return cached status if still valid
+    const now = Date.now();
+    if (!forceRefresh && this.cachedStatus && (now - this.cacheTime) < this.CACHE_TTL) {
+      console.log('[Claude] Returning cached status');
+      return this.cachedStatus;
+    }
+
+    console.log('[Claude] Checking status...');
     const installed = await this.isInstalled();
     if (!installed) {
-      return {
+      const status: ClaudeStatus = {
         installed: false,
         version: null,
         authenticated: false,
         authMethod: null,
         message: 'Claude Code is not installed. Install with: npm install -g @anthropic-ai/claude-code',
       };
+      this.cachedStatus = status;
+      this.cacheTime = now;
+      return status;
     }
 
     const version = await this.getVersion();
     const auth = await this.checkAuth();
 
-    return {
+    const status: ClaudeStatus = {
       installed: true,
       version,
       authenticated: auth.authenticated,
       authMethod: auth.method,
       message: auth.message,
     };
+
+    this.cachedStatus = status;
+    this.cacheTime = now;
+    console.log('[Claude] Status cached:', JSON.stringify(status));
+    return status;
   }
 
   // Run raw command (for version, etc.)

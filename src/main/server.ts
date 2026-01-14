@@ -345,6 +345,8 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
       const claudeStatus = await claudeManager.getStatus();
       const tunnelStatus = tunnelManager.getStatus();
 
+      console.log('[Health] Claude status:', JSON.stringify(claudeStatus));
+
       res.json({
         status: 'ok',
         codex: {
