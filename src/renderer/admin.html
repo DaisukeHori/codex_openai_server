@@ -2075,8 +2075,8 @@
       };
 
       const isMac = navigator.platform.toLowerCase().includes('mac');
-      const releasePageUrl = updateInfo?.version
-        ? `https://github.com/DaisukeHori/codex_openai_server/releases/tag/v${updateInfo.version}`
+      const dmgUrl = updateInfo?.version
+        ? `https://github.com/DaisukeHori/codex_openai_server/releases/download/v${updateInfo.version}/CodexAPIServer-${updateInfo.version}-arm64.dmg`
         : null;
 
       return (
@@ -2138,13 +2138,11 @@
               <div className="flex gap-3">
                 {isMac ? (
                   <a
-                    href={releasePageUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={dmgUrl}
                     className="flex-1 btn-primary py-3 flex items-center justify-center gap-2 no-underline"
                   >
                     <Icons.Download />
-                    リリースページを開く
+                    DMGをダウンロード
                   </a>
                 ) : updateStatus?.downloaded ? (
                   <button onClick={onInstall} className="flex-1 btn-success py-3 flex items-center justify-center gap-2">
