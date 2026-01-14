@@ -27,6 +27,12 @@ class CodexManager {
     this.findCodexPath();
   }
 
+  // Clear cache (no-op for codex as it doesn't use caching)
+  clearCache(): void {
+    // CodexManager doesn't use caching, but this method is provided
+    // for API consistency with ClaudeManager
+  }
+
   // Get possible NVM paths for various Node versions
   private getNvmPaths(): string[] {
     const nvmDir = path.join(os.homedir(), '.nvm', 'versions', 'node');

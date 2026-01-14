@@ -390,7 +390,7 @@
       const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${masterKey}` };
       const handle = async (res) => { if (!res.ok) throw new Error(await res.text()); return res.json(); };
       return {
-        health: () => fetch(`${baseUrl}/health`).then(handle),
+        health: (refresh = false) => fetch(`${baseUrl}/health${refresh ? '?refresh=true' : ''}`).then(handle),
         processStatus: () => fetch(`${baseUrl}/status/processes`, { headers }).then(handle),
         listKeys: (inactive = false) => fetch(`${baseUrl}/v1/api-keys?include_inactive=${inactive}`, { headers }).then(handle),
         getKey: (id) => fetch(`${baseUrl}/v1/api-keys/${id}`, { headers }).then(handle),
@@ -590,7 +590,8 @@
       const load = useCallback(async () => {
         setError(null);
         try {
-          const h = await api.health();
+          // Force refresh to get latest provider status
+          const h = await api.health(true);
           setHealth(h);
 
           // These require auth - handle failures gracefully
@@ -1175,7 +1176,8 @@
       useEffect(() => {
         const loadModels = async () => {
           try {
-            const health = await api.health();
+            // Force refresh on initial load to ensure fresh status after onboarding
+            const health = await api.health(true);
             const models = [];
 
             // Add Codex models if authenticated
@@ -1497,7 +1499,8 @@
       const loadData = useCallback(async () => {
         try {
           const [h, c, t, m] = await Promise.all([
-            api.health(),
+            // Force refresh to get latest provider status
+            api.health(true),
             api.getConfig().catch(() => null),
             api.tunnelStatus().catch(() => ({ active: false })),
             api.listModels().catch(() => ({ data: [] })),

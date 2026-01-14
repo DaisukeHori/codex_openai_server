@@ -341,8 +341,10 @@ export function startServer(port: number, masterKey: string, allowLocalWithoutAu
     // ========================================
 
     app.get('/health', async (req, res) => {
+      // Support forceRefresh via query parameter to bypass cache
+      const forceRefresh = req.query.refresh === 'true';
       const codexStatus = await codexManager.getStatus();
-      const claudeStatus = await claudeManager.getStatus();
+      const claudeStatus = await claudeManager.getStatus(forceRefresh);
       const tunnelStatus = tunnelManager.getStatus();
 
       console.log('[Health] Claude status:', JSON.stringify(claudeStatus));

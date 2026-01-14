@@ -438,6 +438,10 @@ ipcMain.handle('update:downloadDMG', async (_, url: string) => {
 ipcMain.handle('onboarding:complete', () => {
   configManager.completeOnboarding();
 
+  // Clear cached status to ensure fresh detection in admin UI
+  claudeManager.clearCache();
+  codexManager.clearCache();
+
   // Restart app to load main UI
   if (mainWindow) {
     mainWindow.setSize(1200, 800);
