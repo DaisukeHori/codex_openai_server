@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startTunnel: () => ipcRenderer.invoke('tunnel:start'),
   stopTunnel: () => ipcRenderer.invoke('tunnel:stop'),
   getTunnelStatus: () => ipcRenderer.invoke('tunnel:status'),
+  isTunnelInstalled: () => ipcRenderer.invoke('tunnel:isInstalled'),
+  installTunnel: () => ipcRenderer.invoke('tunnel:install'),
 
   // Update
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
@@ -98,6 +100,8 @@ declare global {
       startTunnel: () => Promise<any>;
       stopTunnel: () => Promise<void>;
       getTunnelStatus: () => Promise<any>;
+      isTunnelInstalled: () => Promise<boolean>;
+      installTunnel: () => Promise<{ success: boolean; message: string }>;
       checkForUpdates: () => Promise<any>;
       downloadUpdate: () => Promise<void>;
       installUpdate: () => Promise<void>;

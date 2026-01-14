@@ -463,6 +463,15 @@ ipcMain.handle('tunnel:stop', () => {
   tunnelManager.stop();
 });
 ipcMain.handle('tunnel:status', () => tunnelManager.getStatus());
+ipcMain.handle('tunnel:isInstalled', async () => {
+  return await tunnelManager.isCloudflaredInstalled();
+});
+ipcMain.handle('tunnel:install', async (event) => {
+  const webContents = event.sender;
+  return await tunnelManager.downloadCloudflared((message) => {
+    webContents.send('install:progress', { provider: 'cloudflared', message });
+  });
+});
 
 // Update
 ipcMain.handle('update:check', async () => {

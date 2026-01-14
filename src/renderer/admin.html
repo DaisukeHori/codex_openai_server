@@ -1485,6 +1485,8 @@
       const [config, setConfig] = useState(null);
       const [models, setModels] = useState([]);
       const [tunnel, setTunnel] = useState({ active: false, url: null });
+      const [tunnelInstalled, setTunnelInstalled] = useState(null); // null = checking, true/false = result
+      const [tunnelInstalling, setTunnelInstalling] = useState(false);
       const [loading, setLoading] = useState(true);
       const [tunnelLoading, setTunnelLoading] = useState(false);
       const [serverLoading, setServerLoading] = useState(false);
@@ -1526,6 +1528,13 @@
 
       useEffect(() => { loadData(); }, [loadData]);
 
+      // Check if cloudflared is installed
+      useEffect(() => {
+        if (window.electronAPI) {
+          window.electronAPI.isTunnelInstalled().then(setTunnelInstalled);
+        }
+      }, []);
+
       // Load killOnClose setting from Electron config
       useEffect(() => {
         if (window.electronAPI) {
@@ -1558,6 +1567,24 @@
           showToast('トンネルを停止しました', 'success');
         } catch (e) {
           showToast('トンネル停止失敗', 'error');
+        }
+      };
+
+      const handleTunnelInstall = async () => {
+        if (!window.electronAPI) return;
+        setTunnelInstalling(true);
+        try {
+          const result = await window.electronAPI.installTunnel();
+          if (result.success) {
+            setTunnelInstalled(true);
+            showToast('cloudflaredをインストールしました', 'success');
+          } else {
+            showToast(result.message || 'インストール失敗', 'error');
+          }
+        } catch (e) {
+          showToast('インストール失敗', 'error');
+        } finally {
+          setTunnelInstalling(false);
         }
       };
 
@@ -1723,8 +1750,17 @@
                 </div>
               )}
               
-              <div className="flex gap-3">
-                {tunnel.active ? (
+              <div className="flex gap-3 items-center">
+                {tunnelInstalled === null ? (
+                  <span className="text-sm text-[var(--text-muted)] flex items-center gap-2">
+                    <Spinner size="sm" /> cloudflared確認中...
+                  </span>
+                ) : tunnelInstalled === false ? (
+                  <button onClick={handleTunnelInstall} disabled={tunnelInstalling} className="btn-primary flex items-center gap-2 px-4 py-2 disabled:opacity-50">
+                    {tunnelInstalling ? <Spinner size="sm" /> : '⬇'}
+                    {tunnelInstalling ? 'インストール中...' : 'cloudflaredをインストール'}
+                  </button>
+                ) : tunnel.active ? (
                   <button onClick={handleTunnelStop} className="btn-danger flex items-center gap-2 px-4 py-2">
                     ⏹ トンネル停止
                   </button>
@@ -1735,9 +1771,9 @@
                   </button>
                 )}
               </div>
-              {!tunnel.active && (
+              {tunnelInstalled === false && !tunnelInstalling && (
                 <p className="text-xs text-[var(--text-muted)]">
-                  ※ cloudflaredが必要です: <code className="bg-[var(--bg-tertiary)] px-1 rounded">npm i -g cloudflared</code>
+                  ※ Cloudflare Tunnelを使用するにはcloudflaredのインストールが必要です
                 </p>
               )}
             </div>
