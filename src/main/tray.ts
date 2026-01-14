@@ -5,6 +5,7 @@ import { getServerStatus } from './server';
 import { tunnelManager } from './tunnel';
 
 let tray: Tray | null = null;
+let updateInterval: NodeJS.Timeout | null = null;
 
 export function createTray(mainWindow: BrowserWindow, onQuit: () => void): Tray {
   // Create tray icon
@@ -35,6 +36,8 @@ export function createTray(mainWindow: BrowserWindow, onQuit: () => void): Tray 
   
   // Update context menu
   const updateMenu = () => {
+    if (!tray) return; // Tray was destroyed
+
     const serverStatus = getServerStatus();
     const tunnelStatus = tunnelManager.getStatus();
     
@@ -93,7 +96,7 @@ export function createTray(mainWindow: BrowserWindow, onQuit: () => void): Tray 
   updateMenu();
   
   // Update menu periodically
-  setInterval(updateMenu, 5000);
+  updateInterval = setInterval(updateMenu, 5000);
   
   // Double click to show window
   tray.on('double-click', () => {
@@ -105,6 +108,10 @@ export function createTray(mainWindow: BrowserWindow, onQuit: () => void): Tray 
 }
 
 export function destroyTray(): void {
+  if (updateInterval) {
+    clearInterval(updateInterval);
+    updateInterval = null;
+  }
   if (tray) {
     tray.destroy();
     tray = null;
