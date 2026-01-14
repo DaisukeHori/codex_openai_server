@@ -84,8 +84,8 @@ jobs:
       - name: Copy renderer files
         run: cp -r src/renderer dist/
 
-      - name: Build Electron for arm64 and x64
-        run: npx electron-builder --mac --arch arm64 --arch x64
+      - name: Build Electron for arm64
+        run: npx electron-builder --mac --arm64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
