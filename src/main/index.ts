@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'path';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { configManager } from './config';
 import { codexManager } from './codex';
 import { claudeManager } from './claude';
@@ -8,6 +8,56 @@ import { tunnelManager } from './tunnel';
 import { startServer, stopServer, getServerStatus } from './server';
 import { createTray, destroyTray } from './tray';
 import { updateManager } from './updater';
+
+// Port utilities
+interface PortProcess {
+  pid: number;
+  command: string;
+  user: string;
+}
+
+function checkPortInUse(port: number): PortProcess | null {
+  try {
+    const platform = process.platform;
+    let output: string;
+
+    if (platform === 'darwin' || platform === 'linux') {
+      output = execSync(`lsof -i :${port} -t 2>/dev/null`, { encoding: 'utf-8' });
+      const pid = parseInt(output.trim().split('\n')[0]);
+      if (isNaN(pid)) return null;
+
+      // Get process info
+      const psOutput = execSync(`ps -p ${pid} -o user=,comm= 2>/dev/null`, { encoding: 'utf-8' }).trim();
+      const [user, ...commandParts] = psOutput.split(/\s+/);
+      return { pid, command: commandParts.join(' '), user };
+    } else if (platform === 'win32') {
+      output = execSync(`netstat -ano | findstr :${port}`, { encoding: 'utf-8' });
+      const lines = output.trim().split('\n');
+      if (lines.length === 0) return null;
+      const parts = lines[0].trim().split(/\s+/);
+      const pid = parseInt(parts[parts.length - 1]);
+      if (isNaN(pid)) return null;
+      return { pid, command: 'unknown', user: 'unknown' };
+    }
+  } catch (e) {
+    // Port not in use or error
+  }
+  return null;
+}
+
+function killProcess(pid: number): boolean {
+  try {
+    const platform = process.platform;
+    if (platform === 'win32') {
+      execSync(`taskkill /PID ${pid} /F`, { encoding: 'utf-8' });
+    } else {
+      execSync(`kill -9 ${pid}`, { encoding: 'utf-8' });
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -84,7 +134,11 @@ function createWindow() {
 
 function quitApp() {
   isQuitting = true;
-  stopServer();
+  // Only stop server if killOnClose is enabled (default: true)
+  const killOnClose = configManager.get('killOnClose');
+  if (killOnClose !== false) {
+    stopServer();
+  }
   destroyTray();
   app.quit();
 }
@@ -350,9 +404,33 @@ ipcMain.handle('claude:install', async (event) => {
   });
 });
 
+// Port management
+ipcMain.handle('port:check', (_, port: number) => {
+  return checkPortInUse(port);
+});
+ipcMain.handle('port:kill', (_, pid: number) => {
+  return killProcess(pid);
+});
+
 // Server
 ipcMain.handle('server:start', async () => {
   const port = configManager.get('port');
+
+  // Check if port is in use
+  const portProcess = checkPortInUse(port);
+  if (portProcess) {
+    return {
+      running: false,
+      error: 'Port in use',
+      portConflict: {
+        port,
+        pid: portProcess.pid,
+        command: portProcess.command,
+        user: portProcess.user
+      }
+    };
+  }
+
   try {
     return await startServer(port);
   } catch (error) {
@@ -361,6 +439,18 @@ ipcMain.handle('server:start', async () => {
 });
 ipcMain.handle('server:stop', () => {
   stopServer();
+  return { running: false };
+});
+ipcMain.handle('server:restart', async () => {
+  stopServer();
+  // Wait a bit for port to be released
+  await new Promise(resolve => setTimeout(resolve, 500));
+  const port = configManager.get('port');
+  try {
+    return await startServer(port);
+  } catch (error) {
+    return { running: false, error: error instanceof Error ? error.message : 'Failed to restart' };
+  }
 });
 ipcMain.handle('server:status', () => getServerStatus());
 

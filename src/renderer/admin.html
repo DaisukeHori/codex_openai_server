@@ -1487,6 +1487,13 @@
       const [tunnel, setTunnel] = useState({ active: false, url: null });
       const [loading, setLoading] = useState(true);
       const [tunnelLoading, setTunnelLoading] = useState(false);
+      const [serverLoading, setServerLoading] = useState(false);
+      const [serverStatus, setServerStatus] = useState({ running: true });
+      const [portConflict, setPortConflict] = useState(null);
+      const [killOnClose, setKillOnClose] = useState(() => {
+        const saved = localStorage.getItem('killOnClose');
+        return saved !== null ? JSON.parse(saved) : true;
+      });
       const [portInput, setPortInput] = useState('');
       const { dark, toggle } = useTheme();
       const [notifications, setNotifications] = useState({
@@ -1519,6 +1526,18 @@
 
       useEffect(() => { loadData(); }, [loadData]);
 
+      // Load killOnClose setting from Electron config
+      useEffect(() => {
+        if (window.electronAPI) {
+          window.electronAPI.getConfig().then(cfg => {
+            if (cfg && cfg.killOnClose !== undefined) {
+              setKillOnClose(cfg.killOnClose);
+              localStorage.setItem('killOnClose', JSON.stringify(cfg.killOnClose));
+            }
+          });
+        }
+      }, []);
+
       const handleTunnelStart = async () => {
         setTunnelLoading(true);
         try {
@@ -1539,6 +1558,94 @@
           showToast('トンネルを停止しました', 'success');
         } catch (e) {
           showToast('トンネル停止失敗', 'error');
+        }
+      };
+
+      // Server control handlers
+      const handleServerStart = async () => {
+        setServerLoading(true);
+        setPortConflict(null);
+        try {
+          if (window.electronAPI) {
+            const result = await window.electronAPI.startServer();
+            if (result.portConflict) {
+              setPortConflict(result.portConflict);
+              showToast(`ポート ${result.portConflict.port} は既に使用されています`, 'error');
+            } else if (result.running) {
+              setServerStatus({ running: true });
+              showToast('サーバーを起動しました', 'success');
+              loadData();
+            } else {
+              showToast(result.error || 'サーバー起動失敗', 'error');
+            }
+          }
+        } catch (e) {
+          showToast('サーバー起動失敗', 'error');
+        } finally {
+          setServerLoading(false);
+        }
+      };
+
+      const handleServerStop = async () => {
+        setServerLoading(true);
+        try {
+          if (window.electronAPI) {
+            await window.electronAPI.stopServer();
+            setServerStatus({ running: false });
+            showToast('サーバーを停止しました', 'success');
+          }
+        } catch (e) {
+          showToast('サーバー停止失敗', 'error');
+        } finally {
+          setServerLoading(false);
+        }
+      };
+
+      const handleServerRestart = async () => {
+        setServerLoading(true);
+        setPortConflict(null);
+        try {
+          if (window.electronAPI) {
+            const result = await window.electronAPI.restartServer();
+            if (result.running) {
+              setServerStatus({ running: true });
+              showToast('サーバーを再起動しました', 'success');
+              loadData();
+            } else {
+              showToast(result.error || 'サーバー再起動失敗', 'error');
+            }
+          }
+        } catch (e) {
+          showToast('サーバー再起動失敗', 'error');
+        } finally {
+          setServerLoading(false);
+        }
+      };
+
+      const handleKillConflictProcess = async () => {
+        if (!portConflict) return;
+        try {
+          if (window.electronAPI) {
+            const killed = await window.electronAPI.killPortProcess(portConflict.pid);
+            if (killed) {
+              setPortConflict(null);
+              showToast('プロセスを終了しました', 'success');
+              // Try to start server again after a short delay
+              setTimeout(handleServerStart, 500);
+            } else {
+              showToast('プロセス終了失敗', 'error');
+            }
+          }
+        } catch (e) {
+          showToast('プロセス終了失敗', 'error');
+        }
+      };
+
+      const handleKillOnCloseToggle = (value) => {
+        setKillOnClose(value);
+        localStorage.setItem('killOnClose', JSON.stringify(value));
+        if (window.electronAPI) {
+          window.electronAPI.setConfig('killOnClose', value);
         }
       };
 
@@ -1661,15 +1768,97 @@
             </div>
           </div>
 
+          {/* Server Control */}
+          <div className="card p-6">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+              サーバー制御
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
+                <div>
+                  <span className="text-[var(--text-secondary)]">サーバー状態</span>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">API サーバーの起動状態</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`status-dot ${health?.status === 'ok' ? 'status-online' : 'status-offline'}`} />
+                  <span className={health?.status === 'ok' ? 'text-green-500' : 'text-red-500'}>
+                    {health?.status === 'ok' ? 'オンライン' : 'オフライン'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Port conflict warning */}
+              {portConflict && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                  <p className="text-sm text-red-600 mb-2">⚠️ ポート競合を検出</p>
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    ポート {portConflict.port} は別のプロセスによって使用されています：
+                  </p>
+                  <code className="block mt-2 bg-[var(--bg-secondary)] px-3 py-2 rounded-lg text-sm">
+                    PID: {portConflict.pid} | {portConflict.command} ({portConflict.user})
+                  </code>
+                  <button
+                    onClick={handleKillConflictProcess}
+                    className="btn-danger mt-3 px-4 py-2 text-sm"
+                  >
+                    このプロセスを終了して起動
+                  </button>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                {health?.status === 'ok' ? (
+                  <>
+                    <button
+                      onClick={handleServerStop}
+                      disabled={serverLoading}
+                      className="btn-danger flex items-center gap-2 px-4 py-2 disabled:opacity-50"
+                    >
+                      {serverLoading ? <Spinner size="sm" /> : '⏹'}
+                      停止
+                    </button>
+                    <button
+                      onClick={handleServerRestart}
+                      disabled={serverLoading}
+                      className="btn-secondary flex items-center gap-2 px-4 py-2 disabled:opacity-50"
+                    >
+                      {serverLoading ? <Spinner size="sm" /> : '🔄'}
+                      再起動
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={handleServerStart}
+                    disabled={serverLoading}
+                    className="btn-primary flex items-center gap-2 px-4 py-2 disabled:opacity-50"
+                  >
+                    {serverLoading ? <Spinner size="sm" /> : '▶'}
+                    起動
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Appearance */}
           <div className="card p-6">
             <h3 className="font-semibold mb-4">外観</h3>
-            <div className="flex items-center justify-between py-3">
+            <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
               <div className="flex items-center gap-3">
                 {dark ? <Icons.Moon /> : <Icons.Sun />}
                 <span>ダークモード</span>
               </div>
               <button onClick={toggle} className={`toggle-switch ${dark ? 'active' : ''}`} />
+            </div>
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <span className="text-[var(--text-secondary)]">終了時にサーバーを停止</span>
+                <p className="text-sm text-[var(--text-muted)] mt-1">アプリを閉じたときにサーバーも停止する</p>
+              </div>
+              <button onClick={() => handleKillOnCloseToggle(!killOnClose)} className={`toggle-switch ${killOnClose ? 'active' : ''}`} />
             </div>
           </div>
 

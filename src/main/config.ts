@@ -26,6 +26,7 @@ export interface AppConfig {
   theme: 'light' | 'dark' | 'system';
   minimizeToTray: boolean;
   startMinimized: boolean;
+  killOnClose: boolean;
 
   // Tunnel
   tunnelAutoStart: boolean;
@@ -52,6 +53,7 @@ const defaults: AppConfig = {
   theme: 'system',
   minimizeToTray: true,
   startMinimized: false,
+  killOnClose: true,
   tunnelAutoStart: false,
   lastTunnelUrl: null,
   updateEnabled: true,

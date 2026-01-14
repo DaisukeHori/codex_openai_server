@@ -20,9 +20,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getClaudeStatus: () => ipcRenderer.invoke('claude:status'),
   installClaude: () => ipcRenderer.invoke('claude:install'),
 
+  // Port management
+  checkPort: (port: number) => ipcRenderer.invoke('port:check', port),
+  killPortProcess: (pid: number) => ipcRenderer.invoke('port:kill', pid),
+
   // Server
   startServer: () => ipcRenderer.invoke('server:start'),
   stopServer: () => ipcRenderer.invoke('server:stop'),
+  restartServer: () => ipcRenderer.invoke('server:restart'),
   getServerStatus: () => ipcRenderer.invoke('server:status'),
   
   // Tunnel
@@ -84,8 +89,11 @@ declare global {
       installCodex: () => Promise<{ success: boolean; message: string }>;
       getClaudeStatus: () => Promise<any>;
       installClaude: () => Promise<{ success: boolean; message: string }>;
+      checkPort: (port: number) => Promise<{ pid: number; command: string; user: string } | null>;
+      killPortProcess: (pid: number) => Promise<boolean>;
       startServer: () => Promise<any>;
-      stopServer: () => Promise<void>;
+      stopServer: () => Promise<any>;
+      restartServer: () => Promise<any>;
       getServerStatus: () => Promise<any>;
       startTunnel: () => Promise<any>;
       stopTunnel: () => Promise<void>;
