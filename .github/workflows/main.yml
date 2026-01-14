@@ -138,6 +138,34 @@ jobs:
     needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changelog
+        id: changelog
+        run: |
+          # 前回のタグを取得
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            # タグがない場合は最新10件のコミット
+            CHANGELOG=$(git log --oneline -10 --pretty=format:"- %s")
+          else
+            # 前回のタグからの変更を取得
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --oneline --pretty=format:"- %s")
+          fi
+
+          # 空の場合のデフォルト
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="- バグ修正と改善"
+          fi
+
+          # マルチライン出力用
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -153,7 +181,6 @@ jobs:
           name: Release v1.0.${{ github.run_number }}
           draft: false
           prerelease: false
-          generate_release_notes: true
           files: |
             artifacts/windows-build/*
             artifacts/macos-build/*
@@ -169,5 +196,6 @@ jobs:
             - **Linux**: `.AppImage` または `.deb`
 
             ### 変更内容
+            ${{ steps.changelog.outputs.changelog }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
