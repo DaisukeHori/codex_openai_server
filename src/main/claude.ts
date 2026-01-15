@@ -688,45 +688,57 @@ export class ClaudeManager {
     return new Promise((resolve, reject) => {
       const cliModel = this.getCliModel(model);
       console.log(`[Claude] runPrompt: claudePath=${this.claudePath}, model=${model}, cliModel=${cliModel}`);
+      console.log(`[Claude] runPrompt: prompt length=${prompt.length}`);
 
       let output = '';
       let errorOutput = '';
       let proc;
 
-      // Use login shell to get proper PATH (like runRawCommand)
       const platform = process.platform;
 
-      // Escape prompt for shell - handle special characters
-      const escapeForShell = (str: string): string => {
-        // Use single quotes for the prompt and escape single quotes inside
-        return str.replace(/'/g, "'\"'\"'");
-      };
-
-      // Use plain text output (simpler and more reliable)
-      if (platform === 'darwin') {
-        // On macOS, use login shell with single-quoted prompt for safety
-        const escapedPrompt = escapeForShell(prompt);
-        const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
-        console.log(`[Claude] Running: /bin/zsh -l -c ${command.substring(0, 100)}...`);
-        proc = spawn('/bin/zsh', ['-l', '-c', command], {
-          env: { ...process.env },
-        });
-      } else if (platform === 'win32') {
-        // Windows: pass args directly, shell handles escaping
+      // If we have an absolute path, execute directly without shell wrapper
+      // This is more reliable in .app environments
+      if (this.claudePath.startsWith('/') || (platform === 'win32' && this.claudePath.includes(':'))) {
+        console.log(`[Claude] Using direct execution with absolute path: ${this.claudePath}`);
         const args = ['-p', prompt, '--model', cliModel];
         proc = spawn(this.claudePath, args, {
-          shell: true,
           env: { ...process.env },
+          stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else {
-        // Linux: use login shell with single-quoted prompt
-        const escapedPrompt = escapeForShell(prompt);
-        const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
-        console.log(`[Claude] Running: /bin/bash -l -c ${command.substring(0, 100)}...`);
-        proc = spawn('/bin/bash', ['-l', '-c', command], {
-          env: { ...process.env },
-        });
+        // Fallback to shell wrapper for PATH-based resolution
+        console.log(`[Claude] Using shell wrapper (non-absolute path)`);
+        const escapeForShell = (str: string): string => {
+          return str.replace(/'/g, "'\"'\"'");
+        };
+
+        if (platform === 'darwin') {
+          const escapedPrompt = escapeForShell(prompt);
+          const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
+          console.log(`[Claude] Running: /bin/zsh -l -c ${command.substring(0, 100)}...`);
+          proc = spawn('/bin/zsh', ['-l', '-c', command], {
+            env: { ...process.env },
+          });
+        } else if (platform === 'win32') {
+          const args = ['-p', prompt, '--model', cliModel];
+          proc = spawn(this.claudePath, args, {
+            shell: true,
+            env: { ...process.env },
+          });
+        } else {
+          const escapedPrompt = escapeForShell(prompt);
+          const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
+          console.log(`[Claude] Running: /bin/bash -l -c ${command.substring(0, 100)}...`);
+          proc = spawn('/bin/bash', ['-l', '-c', command], {
+            env: { ...process.env },
+          });
+        }
       }
+
+      // Log when process actually spawns
+      proc.on('spawn', () => {
+        console.log(`[Claude] Process spawned successfully, PID: ${proc.pid}`);
+      });
 
       const timer = setTimeout(() => {
         proc.kill();
@@ -868,36 +880,47 @@ export class ClaudeManager {
     console.log(`[Claude] spawnInteractive: claudePath=${this.claudePath}, model=${model}, cliModel=${cliModel}`);
 
     let proc;
-
-    // Use login shell to get proper PATH (like runRawCommand)
     const platform = process.platform;
 
-    // Escape prompt for shell - handle special characters
-    const escapeForShell = (str: string): string => {
-      return str.replace(/'/g, "'\"'\"'");
-    };
-
-    // Use plain text output for streaming (simpler and more reliable)
-    if (platform === 'darwin') {
-      const escapedPrompt = escapeForShell(prompt);
-      const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
-      console.log(`[Claude] Running: /bin/zsh -l -c ${command.substring(0, 100)}...`);
-      proc = spawn('/bin/zsh', ['-l', '-c', command], {
+    // If we have an absolute path, execute directly without shell wrapper
+    if (this.claudePath.startsWith('/') || (platform === 'win32' && this.claudePath.includes(':'))) {
+      console.log(`[Claude] spawnInteractive: Using direct execution with absolute path`);
+      const args = ['-p', prompt, '--model', cliModel];
+      proc = spawn(this.claudePath, args, {
         env: { ...process.env },
-      });
-    } else if (platform === 'win32') {
-      proc = spawn(this.claudePath, ['-p', prompt, '--model', cliModel], {
-        shell: true,
-        env: { ...process.env },
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
     } else {
-      const escapedPrompt = escapeForShell(prompt);
-      const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
-      console.log(`[Claude] Running: /bin/bash -l -c ${command.substring(0, 100)}...`);
-      proc = spawn('/bin/bash', ['-l', '-c', command], {
-        env: { ...process.env },
-      });
+      // Fallback to shell wrapper
+      console.log(`[Claude] spawnInteractive: Using shell wrapper`);
+      const escapeForShell = (str: string): string => {
+        return str.replace(/'/g, "'\"'\"'");
+      };
+
+      if (platform === 'darwin') {
+        const escapedPrompt = escapeForShell(prompt);
+        const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
+        proc = spawn('/bin/zsh', ['-l', '-c', command], {
+          env: { ...process.env },
+        });
+      } else if (platform === 'win32') {
+        proc = spawn(this.claudePath, ['-p', prompt, '--model', cliModel], {
+          shell: true,
+          env: { ...process.env },
+        });
+      } else {
+        const escapedPrompt = escapeForShell(prompt);
+        const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
+        proc = spawn('/bin/bash', ['-l', '-c', command], {
+          env: { ...process.env },
+        });
+      }
     }
+
+    // Log when process spawns
+    proc.on('spawn', () => {
+      console.log(`[Claude] spawnInteractive: Process spawned, PID: ${proc.pid}`);
+    });
 
     this.activeProcesses.set(id, {
       process: proc,
