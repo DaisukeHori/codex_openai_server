@@ -588,7 +588,7 @@ export class ClaudeManager {
            model === 'haiku';
   }
 
-  // Run prompt with JSON output
+  // Run prompt with text output
   async runPrompt(prompt: string, model: string, timeout: number = 120000): Promise<ClaudeResponse> {
     return new Promise((resolve, reject) => {
       const cliModel = this.getCliModel(model);
@@ -599,19 +599,26 @@ export class ClaudeManager {
 
       // Use login shell to get proper PATH (like runRawCommand)
       const platform = process.platform;
-      const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      const command = `${this.claudePath} -p '${escapedPrompt}' --model ${cliModel} --output-format json`;
+
+      // Build arguments array for proper escaping
+      const args = ['-p', prompt, '--model', cliModel];
 
       if (platform === 'darwin') {
+        // On macOS, use login shell but spawn claude directly with proper args
+        const escapedPrompt = prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
+        const command = `"${this.claudePath}" -p "${escapedPrompt}" --model ${cliModel}`;
         proc = spawn('/bin/zsh', ['-l', '-c', command], {
           env: { ...process.env },
         });
       } else if (platform === 'win32') {
-        proc = spawn(this.claudePath, ['-p', prompt, '--model', cliModel, '--output-format', 'json'], {
+        proc = spawn(this.claudePath, args, {
           shell: true,
           env: { ...process.env },
         });
       } else {
+        // Linux
+        const escapedPrompt = prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
+        const command = `"${this.claudePath}" -p "${escapedPrompt}" --model ${cliModel}`;
         proc = spawn('/bin/bash', ['-l', '-c', command], {
           env: { ...process.env },
         });
@@ -634,24 +641,12 @@ export class ClaudeManager {
         clearTimeout(timer);
 
         if (code === 0) {
-          try {
-            // Parse JSON output
-            const parsed = JSON.parse(output);
-            resolve({
-              result: parsed.result || parsed.content || output,
-              cost_usd: parsed.cost_usd,
-              session_id: parsed.session_id,
-              is_error: parsed.is_error || false,
-            });
-          } catch (e) {
-            // If JSON parsing fails, return raw output
-            resolve({
-              result: output.trim(),
-              is_error: false,
-            });
-          }
+          resolve({
+            result: output.trim(),
+            is_error: false,
+          });
         } else {
-          reject(new Error(errorOutput || `Exit code: ${code}`));
+          reject(new Error(errorOutput || output || `Exit code: ${code}`));
         }
       });
 
@@ -695,19 +690,21 @@ export class ClaudeManager {
 
     // Use login shell to get proper PATH (like runRawCommand)
     const platform = process.platform;
-    const escapedPrompt = prompt.replace(/'/g, "'\\''");
-    const command = `${this.claudePath} -p '${escapedPrompt}' --model ${cliModel} --output-format stream-json`;
 
     if (platform === 'darwin') {
+      const escapedPrompt = prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
+      const command = `"${this.claudePath}" -p "${escapedPrompt}" --model ${cliModel}`;
       proc = spawn('/bin/zsh', ['-l', '-c', command], {
         env: { ...process.env },
       });
     } else if (platform === 'win32') {
-      proc = spawn(this.claudePath, ['-p', prompt, '--model', cliModel, '--output-format', 'stream-json'], {
+      proc = spawn(this.claudePath, ['-p', prompt, '--model', cliModel], {
         shell: true,
         env: { ...process.env },
       });
     } else {
+      const escapedPrompt = prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
+      const command = `"${this.claudePath}" -p "${escapedPrompt}" --model ${cliModel}`;
       proc = spawn('/bin/bash', ['-l', '-c', command], {
         env: { ...process.env },
       });
