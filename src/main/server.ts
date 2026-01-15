@@ -325,6 +325,18 @@ export function startServer(port: number): Promise<ServerStatus> {
         },
       });
     });
+
+    // Process status endpoint (for admin UI)
+    app.get('/status/processes', (req, res) => {
+      res.json({
+        codex: {
+          active: codexManager.getActiveCount(),
+        },
+        claude: {
+          active: claudeManager.getActiveCount(),
+        },
+      });
+    });
     
     // ========================================
     // Models
