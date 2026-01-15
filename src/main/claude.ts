@@ -701,8 +701,15 @@ export class ClaudeManager {
       if (this.claudePath.startsWith('/') || (platform === 'win32' && this.claudePath.includes(':'))) {
         console.log(`[Claude] Using direct execution with absolute path: ${this.claudePath}`);
         const args = ['-p', prompt, '--model', cliModel];
+
+        // Add the CLI's directory to PATH so 'node' can be found
+        // (Claude CLI uses #!/usr/bin/env node)
+        const cliDir = path.dirname(this.claudePath);
+        const enhancedPath = `${cliDir}:${process.env.PATH || ''}`;
+        console.log(`[Claude] Enhanced PATH includes: ${cliDir}`);
+
         proc = spawn(this.claudePath, args, {
-          env: { ...process.env },
+          env: { ...process.env, PATH: enhancedPath },
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else {
@@ -886,8 +893,13 @@ export class ClaudeManager {
     if (this.claudePath.startsWith('/') || (platform === 'win32' && this.claudePath.includes(':'))) {
       console.log(`[Claude] spawnInteractive: Using direct execution with absolute path`);
       const args = ['-p', prompt, '--model', cliModel];
+
+      // Add the CLI's directory to PATH so 'node' can be found
+      const cliDir = path.dirname(this.claudePath);
+      const enhancedPath = `${cliDir}:${process.env.PATH || ''}`;
+
       proc = spawn(this.claudePath, args, {
-        env: { ...process.env },
+        env: { ...process.env, PATH: enhancedPath },
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } else {
