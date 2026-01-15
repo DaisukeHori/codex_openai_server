@@ -898,18 +898,25 @@ export class ClaudeManager {
 
     proc.stdout?.on('data', (data) => {
       const chunk = data.toString();
+      console.log(`[Claude stdout] Received ${chunk.length} bytes:`, chunk.substring(0, 100));
       output += chunk;
       // Send text directly
       onData(chunk);
     });
 
     proc.stderr?.on('data', (data) => {
-      // Log stderr but don't send to client as content
       const text = data.toString();
-      console.log('[Claude stderr]', text);
+      console.log(`[Claude stderr] Received ${text.length} bytes:`, text.substring(0, 100));
+      // Claude CLI may output actual response content to stderr
+      // Only add to output if it looks like content (not progress/status messages)
+      if (!text.includes('⠋') && !text.includes('⠙') && !text.includes('⠹') && !text.includes('⠸')) {
+        output += text;
+        onData(text);
+      }
     });
 
     proc.on('close', (code) => {
+      console.log(`[Claude] Process closed with code ${code}, output length: ${output.length}`);
       this.activeProcesses.delete(id);
       if (code === 0) {
         onEnd(output);
@@ -919,6 +926,7 @@ export class ClaudeManager {
     });
 
     proc.on('error', (err) => {
+      console.log(`[Claude] Process error:`, err);
       this.activeProcesses.delete(id);
       onError(err);
     });
