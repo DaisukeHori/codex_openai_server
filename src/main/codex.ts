@@ -561,6 +561,59 @@ class CodexManager {
     });
   }
   
+  // Auto-detect and ensure valid CLI path
+  private ensureValidPathSync(): boolean {
+    // 1. Check custom path from config
+    const customPath = configManager.get('customCodexPath');
+    if (customPath && fs.existsSync(customPath)) {
+      this.codexPath = customPath;
+      console.log(`[Codex] Using custom path: ${customPath}`);
+      return true;
+    }
+
+    // 2. Check if current path is valid
+    if (this.codexPath !== 'codex' && fs.existsSync(this.codexPath)) {
+      return true;
+    }
+
+    // 3. Try auto-detect using which command
+    const platform = process.platform;
+    try {
+      let whichCommand: string;
+      if (platform === 'darwin') {
+        whichCommand = '/bin/zsh -l -c "which codex"';
+      } else if (platform === 'win32') {
+        whichCommand = 'where codex';
+      } else {
+        whichCommand = '/bin/bash -l -c "which codex"';
+      }
+
+      const output = execSync(whichCommand, {
+        encoding: 'utf-8',
+        timeout: 10000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      const detectedPath = output.trim().split('\n')[0];
+      if (detectedPath && fs.existsSync(detectedPath)) {
+        console.log(`[Codex] Auto-detected path via which: ${detectedPath}`);
+        this.codexPath = detectedPath;
+        return true;
+      }
+    } catch (e) {
+      console.log(`[Codex] which command failed:`, e instanceof Error ? e.message : e);
+    }
+
+    // 4. Re-run findCodexPath as last resort
+    this.findCodexPath();
+    if (this.codexPath !== 'codex' && fs.existsSync(this.codexPath)) {
+      return true;
+    }
+
+    console.log(`[Codex] Could not find valid CLI path`);
+    return false;
+  }
+
   spawnInteractive(
     prompt: string,
     model: string,
@@ -570,12 +623,13 @@ class CodexManager {
   ): string {
     const id = `proc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Pre-check: if codexPath is just 'codex', CLI wasn't found
+    // Ensure valid path (auto-detect if needed)
+    const pathValid = this.ensureValidPathSync();
     console.log(`[Codex] spawnInteractive: codexPath=${this.codexPath}, model=${model}`);
-    if (this.codexPath === 'codex' && !fs.existsSync('/usr/local/bin/codex') && !fs.existsSync('/usr/bin/codex')) {
+    if (!pathValid) {
       // CLI not found - return error immediately
       setTimeout(() => {
-        onError(new Error('Codex CLI is not installed. Install with: npm install -g @openai/codex'));
+        onError(new Error('Codex CLI not found. Install with: npm install -g @openai/codex'));
       }, 0);
       return id;
     }

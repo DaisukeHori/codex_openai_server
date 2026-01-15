@@ -613,20 +613,81 @@ export class ClaudeManager {
     }
   }
 
+  // Auto-detect CLI path using login shell's which command
+  private async autoDetectPath(): Promise<string | null> {
+    const platform = process.platform;
+
+    try {
+      let whichCommand: string;
+      if (platform === 'darwin') {
+        whichCommand = '/bin/zsh -l -c "which claude"';
+      } else if (platform === 'win32') {
+        whichCommand = 'where claude';
+      } else {
+        whichCommand = '/bin/bash -l -c "which claude"';
+      }
+
+      const output = execSync(whichCommand, {
+        encoding: 'utf-8',
+        timeout: 10000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      const detectedPath = output.trim().split('\n')[0];
+      if (detectedPath && fs.existsSync(detectedPath)) {
+        console.log(`[Claude] Auto-detected path via which: ${detectedPath}`);
+        return detectedPath;
+      }
+    } catch (e) {
+      console.log(`[Claude] which command failed:`, e instanceof Error ? e.message : e);
+    }
+
+    return null;
+  }
+
+  // Ensure path is valid, auto-detect if needed
+  private async ensureValidPath(): Promise<boolean> {
+    // 1. Check custom path from config
+    const customPath = configManager.get('customClaudePath');
+    if (customPath && fs.existsSync(customPath)) {
+      this.claudePath = customPath;
+      console.log(`[Claude] Using custom path: ${customPath}`);
+      return true;
+    }
+
+    // 2. Check if current path is valid
+    if (this.claudePath !== 'claude' && fs.existsSync(this.claudePath)) {
+      return true;
+    }
+
+    // 3. Try auto-detect using which command
+    const detectedPath = await this.autoDetectPath();
+    if (detectedPath) {
+      this.claudePath = detectedPath;
+      return true;
+    }
+
+    // 4. Re-run findClaudePath as last resort
+    this.findClaudePath();
+    if (this.claudePath !== 'claude' && fs.existsSync(this.claudePath)) {
+      return true;
+    }
+
+    console.log(`[Claude] Could not find valid CLI path`);
+    return false;
+  }
+
   // Run prompt with JSON output format for structured responses
   async runPrompt(prompt: string, model: string, timeout: number = 120000): Promise<ClaudeResponse> {
+    // Ensure valid path before running (auto-detect if needed)
+    const pathValid = await this.ensureValidPath();
+    if (!pathValid) {
+      return Promise.reject(new Error('Claude Code CLI not found. Install with: npm install -g @anthropic-ai/claude-code'));
+    }
+
     return new Promise((resolve, reject) => {
-      // Refresh path from config before running
-      this.refreshPath();
-
       const cliModel = this.getCliModel(model);
-
-      // Pre-check: if claudePath is just 'claude', CLI wasn't found
       console.log(`[Claude] runPrompt: claudePath=${this.claudePath}, model=${model}, cliModel=${cliModel}`);
-      if (this.claudePath === 'claude' && !fs.existsSync('/usr/local/bin/claude') && !fs.existsSync('/usr/bin/claude')) {
-        reject(new Error('Claude Code is not installed. Install with: npm install -g @anthropic-ai/claude-code'));
-        return;
-      }
 
       let output = '';
       let errorOutput = '';
@@ -730,6 +791,59 @@ export class ClaudeManager {
     return this.runPrompt(prompt, model, timeout);
   }
 
+  // Sync version of ensureValidPath for use in spawnInteractive
+  private ensureValidPathSync(): boolean {
+    // 1. Check custom path from config
+    const customPath = configManager.get('customClaudePath');
+    if (customPath && fs.existsSync(customPath)) {
+      this.claudePath = customPath;
+      console.log(`[Claude] Using custom path: ${customPath}`);
+      return true;
+    }
+
+    // 2. Check if current path is valid
+    if (this.claudePath !== 'claude' && fs.existsSync(this.claudePath)) {
+      return true;
+    }
+
+    // 3. Try auto-detect using which command (sync)
+    const platform = process.platform;
+    try {
+      let whichCommand: string;
+      if (platform === 'darwin') {
+        whichCommand = '/bin/zsh -l -c "which claude"';
+      } else if (platform === 'win32') {
+        whichCommand = 'where claude';
+      } else {
+        whichCommand = '/bin/bash -l -c "which claude"';
+      }
+
+      const output = execSync(whichCommand, {
+        encoding: 'utf-8',
+        timeout: 10000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      const detectedPath = output.trim().split('\n')[0];
+      if (detectedPath && fs.existsSync(detectedPath)) {
+        console.log(`[Claude] Auto-detected path via which: ${detectedPath}`);
+        this.claudePath = detectedPath;
+        return true;
+      }
+    } catch (e) {
+      console.log(`[Claude] which command failed:`, e instanceof Error ? e.message : e);
+    }
+
+    // 4. Re-run findClaudePath as last resort
+    this.findClaudePath();
+    if (this.claudePath !== 'claude' && fs.existsSync(this.claudePath)) {
+      return true;
+    }
+
+    console.log(`[Claude] Could not find valid CLI path`);
+    return false;
+  }
+
   // Spawn interactive process (for streaming with stream-json format)
   spawnInteractive(
     prompt: string,
@@ -740,20 +854,18 @@ export class ClaudeManager {
   ): string {
     const id = `claude_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Refresh path from config before running
-    this.refreshPath();
-
-    const cliModel = this.getCliModel(model);
-
-    // Pre-check: if claudePath is just 'claude', CLI wasn't found
-    console.log(`[Claude] spawnInteractive: claudePath=${this.claudePath}, model=${model}, cliModel=${cliModel}`);
-    if (this.claudePath === 'claude' && !fs.existsSync('/usr/local/bin/claude') && !fs.existsSync('/usr/bin/claude')) {
+    // Ensure valid path (auto-detect if needed)
+    const pathValid = this.ensureValidPathSync();
+    if (!pathValid) {
       // CLI not found - return error immediately
       setTimeout(() => {
-        onError(new Error('Claude Code is not installed. Install with: npm install -g @anthropic-ai/claude-code'));
+        onError(new Error('Claude Code CLI not found. Install with: npm install -g @anthropic-ai/claude-code'));
       }, 0);
       return id;
     }
+
+    const cliModel = this.getCliModel(model);
+    console.log(`[Claude] spawnInteractive: claudePath=${this.claudePath}, model=${model}, cliModel=${cliModel}`);
 
     let proc;
 
