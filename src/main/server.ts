@@ -261,7 +261,18 @@ export function startServer(port: number): Promise<ServerStatus> {
     };
 
     app.get('/openapi.json', (req, res) => {
-      res.json(openApiSpec);
+      // Dynamically set server URL based on request host
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+      const host = req.headers['x-forwarded-host'] || req.headers.host || `localhost:${port}`;
+      const serverUrl = `${protocol}://${host}`;
+
+      // Clone spec and update server URL
+      const dynamicSpec = {
+        ...openApiSpec,
+        servers: [{ url: serverUrl }],
+      };
+
+      res.json(dynamicSpec);
     });
 
     app.get('/docs', (req, res) => {
