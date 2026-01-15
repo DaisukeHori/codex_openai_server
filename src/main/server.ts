@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
+import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { app as electronApp } from 'electron';
 import Database from 'better-sqlite3';
@@ -10,6 +11,11 @@ import { claudeManager } from './claude';
 import { tunnelManager } from './tunnel';
 import { getProvider, getModelInfo, runWithHistory, runWithHistoryStream, getAllModels, Provider } from './model-router';
 import { logManager } from './logger';
+
+// Hash function for API keys
+function hashKey(key: string): string {
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
 
 let server: any = null;
 let db: Database.Database | null = null;
