@@ -700,7 +700,8 @@ export class ClaudeManager {
       // This is more reliable in .app environments
       if (this.claudePath.startsWith('/') || (platform === 'win32' && this.claudePath.includes(':'))) {
         console.log(`[Claude] Using direct execution with absolute path: ${this.claudePath}`);
-        const args = ['-p', prompt, '--model', cliModel];
+        // Use --print for plain text output without formatting
+        const args = ['-p', prompt, '--model', cliModel, '--print'];
 
         // Add the CLI's directory to PATH so 'node' can be found
         // (Claude CLI uses #!/usr/bin/env node)
@@ -712,6 +713,9 @@ export class ClaudeManager {
           env: { ...process.env, PATH: enhancedPath },
           stdio: ['pipe', 'pipe', 'pipe'],
         });
+
+        // Close stdin immediately to signal no more input
+        proc.stdin?.end();
       } else {
         // Fallback to shell wrapper for PATH-based resolution
         console.log(`[Claude] Using shell wrapper (non-absolute path)`);
@@ -892,7 +896,8 @@ export class ClaudeManager {
     // If we have an absolute path, execute directly without shell wrapper
     if (this.claudePath.startsWith('/') || (platform === 'win32' && this.claudePath.includes(':'))) {
       console.log(`[Claude] spawnInteractive: Using direct execution with absolute path`);
-      const args = ['-p', prompt, '--model', cliModel];
+      // Use --print for plain text output without formatting
+      const args = ['-p', prompt, '--model', cliModel, '--print'];
 
       // Add the CLI's directory to PATH so 'node' can be found
       const cliDir = path.dirname(this.claudePath);
@@ -902,6 +907,9 @@ export class ClaudeManager {
         env: { ...process.env, PATH: enhancedPath },
         stdio: ['pipe', 'pipe', 'pipe'],
       });
+
+      // Close stdin immediately to signal no more input
+      proc.stdin?.end();
     } else {
       // Fallback to shell wrapper
       console.log(`[Claude] spawnInteractive: Using shell wrapper`);
