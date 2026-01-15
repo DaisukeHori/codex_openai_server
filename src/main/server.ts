@@ -144,8 +144,124 @@ export function startServer(port: number): Promise<ServerStatus> {
       next();
     });
 
-    // No authentication required for local app
-    
+    // ========================================
+    // Authentication Middleware
+    // ========================================
+
+    // Helper: Check if request is from localhost
+    function isLocalRequest(req: Request): boolean {
+      const ip = req.ip || req.socket.remoteAddress || '';
+      const forwardedFor = req.headers['x-forwarded-for'] as string;
+
+      // If there's an x-forwarded-for header, it's coming through a proxy (like Cloudflare Tunnel)
+      if (forwardedFor) {
+        return false;
+      }
+
+      // Check if IP is localhost
+      return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost';
+    }
+
+    // Helper: Validate API key
+    function validateApiKey(key: string): { valid: boolean; keyId?: string; error?: string } {
+      if (!key) {
+        return { valid: false, error: 'API key is required' };
+      }
+
+      const keyHash = hashKey(key);
+      const row = db!.prepare('SELECT * FROM api_keys WHERE key_hash = ?').get(keyHash) as any;
+
+      if (!row) {
+        return { valid: false, error: 'Invalid API key' };
+      }
+
+      if (!row.is_active) {
+        return { valid: false, error: 'API key has been revoked' };
+      }
+
+      if (row.expires_at && row.expires_at < Math.floor(Date.now() / 1000)) {
+        return { valid: false, error: 'API key has expired' };
+      }
+
+      // Update last_used_at
+      db!.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(
+        Math.floor(Date.now() / 1000),
+        row.id
+      );
+
+      return { valid: true, keyId: row.id };
+    }
+
+    // Authentication middleware
+    const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
+      // Get the full path (originalUrl) for checking
+      const fullPath = req.originalUrl.split('?')[0]; // Remove query string
+
+      // Paths that don't require authentication
+      const publicPaths = ['/health', '/docs', '/openapi.json', '/admin', '/v1/models'];
+
+      if (publicPaths.some(p => fullPath === p || fullPath.startsWith(p + '/'))) {
+        return next();
+      }
+
+      // Allow local requests without authentication (configurable)
+      const allowLocalWithoutAuth = configManager.get('allowLocalWithoutAuth') !== false;
+      if (allowLocalWithoutAuth && isLocalRequest(req)) {
+        return next();
+      }
+
+      // Check for Bearer token
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        logManager.warning('auth', `Unauthorized request to ${req.path}`, {
+          ip: req.ip || req.socket.remoteAddress,
+          isLocal: isLocalRequest(req),
+        });
+        res.status(401).json({
+          error: {
+            message: 'Authentication required. Please provide a valid API key in the Authorization header.',
+            type: 'authentication_error',
+          },
+        });
+        return;
+      }
+
+      const token = authHeader.slice(7); // Remove "Bearer "
+
+      // Check if it's the master key
+      const masterKey = configManager.get('masterKey');
+      if (masterKey && token === masterKey) {
+        return next();
+      }
+
+      // Validate API key
+      const validation = validateApiKey(token);
+      if (!validation.valid) {
+        logManager.warning('auth', `Invalid API key: ${validation.error}`, {
+          ip: req.ip || req.socket.remoteAddress,
+          keyPrefix: token.slice(0, 8),
+        });
+        res.status(401).json({
+          error: {
+            message: validation.error,
+            type: 'authentication_error',
+          },
+        });
+        return;
+      }
+
+      // Attach key info to request for logging
+      (req as any).apiKeyId = validation.keyId;
+      next();
+    };
+
+    // Apply authentication middleware to API routes
+    app.use('/v1', authMiddleware);
+    app.use('/admin/logs', authMiddleware);
+    app.use('/admin/tunnel', authMiddleware);
+    app.use('/admin/config', authMiddleware);
+    app.use('/status', authMiddleware);
+
     // ========================================
     // API Documentation
     // ========================================
