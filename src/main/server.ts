@@ -321,7 +321,7 @@ export function startServer(port: number): Promise<ServerStatus> {
           port: configManager.get('port'),
         },
         storage: {
-          totalResponses: db!.prepare('SELECT COUNT(*) as count FROM responses').get() as any,
+          totalResponses: (db!.prepare('SELECT COUNT(*) as count FROM responses').get() as any)?.count || 0,
         },
       });
     });

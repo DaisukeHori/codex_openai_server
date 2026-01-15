@@ -73,19 +73,38 @@ class TunnelManager {
   }
   
   async isCloudflaredInstalled(): Promise<boolean> {
+    const cloudflaredPath = this.getCloudflaredPath();
+
+    // If it's a full path, check if file exists first
+    if (cloudflaredPath !== 'cloudflared' && !fs.existsSync(cloudflaredPath)) {
+      return false;
+    }
+
     return new Promise((resolve) => {
-      const cloudflaredPath = this.getCloudflaredPath();
-      const proc = spawn(cloudflaredPath, ['--version'], {
-        shell: process.platform === 'win32',
-      });
-      
-      proc.on('close', (code) => {
-        resolve(code === 0);
-      });
-      
-      proc.on('error', () => {
+      try {
+        const proc = spawn(cloudflaredPath, ['--version'], {
+          shell: process.platform === 'win32',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+        // Set timeout
+        const timeout = setTimeout(() => {
+          proc.kill();
+          resolve(false);
+        }, 5000);
+
+        proc.on('close', (code) => {
+          clearTimeout(timeout);
+          resolve(code === 0);
+        });
+
+        proc.on('error', () => {
+          clearTimeout(timeout);
+          resolve(false);
+        });
+      } catch (e) {
         resolve(false);
-      });
+      }
     });
   }
   
