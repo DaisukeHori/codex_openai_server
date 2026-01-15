@@ -26,19 +26,27 @@ export interface ClaudeResponse {
 }
 
 // Claude model aliases mapping
+// These map API model names to CLI model aliases
 export const CLAUDE_MODELS: Record<string, { cliModel: string; displayName: string }> = {
+  // Opus models
   'claude-opus-4': { cliModel: 'opus', displayName: 'Claude Opus 4' },
   'claude-opus-4-5': { cliModel: 'opus', displayName: 'Claude Opus 4.5' },
   'claude-opus-4.5': { cliModel: 'opus', displayName: 'Claude Opus 4.5' },
+  // Sonnet models
   'claude-sonnet-4': { cliModel: 'sonnet', displayName: 'Claude Sonnet 4' },
   'claude-sonnet-4-5': { cliModel: 'sonnet', displayName: 'Claude Sonnet 4.5' },
   'claude-sonnet-4.5': { cliModel: 'sonnet', displayName: 'Claude Sonnet 4.5' },
+  'claude-3-5-sonnet': { cliModel: 'sonnet', displayName: 'Claude 3.5 Sonnet' },
+  'claude-3-5-sonnet-20241022': { cliModel: 'sonnet', displayName: 'Claude 3.5 Sonnet (Oct 2024)' },
+  // Haiku models
   'claude-haiku': { cliModel: 'haiku', displayName: 'Claude Haiku' },
   'claude-haiku-3-5': { cliModel: 'haiku', displayName: 'Claude Haiku 3.5' },
-  // Direct aliases (user can also use these)
-  'opus': { cliModel: 'opus', displayName: 'Claude Opus' },
-  'sonnet': { cliModel: 'sonnet', displayName: 'Claude Sonnet' },
-  'haiku': { cliModel: 'haiku', displayName: 'Claude Haiku' },
+  'claude-3-5-haiku': { cliModel: 'haiku', displayName: 'Claude 3.5 Haiku' },
+  'claude-3-haiku': { cliModel: 'haiku', displayName: 'Claude 3 Haiku' },
+  // Direct CLI aliases (user can also use these directly)
+  'opus': { cliModel: 'opus', displayName: 'Claude Opus (Latest)' },
+  'sonnet': { cliModel: 'sonnet', displayName: 'Claude Sonnet (Latest)' },
+  'haiku': { cliModel: 'haiku', displayName: 'Claude Haiku (Latest)' },
 };
 
 export class ClaudeManager {

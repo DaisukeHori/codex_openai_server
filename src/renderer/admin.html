@@ -1189,36 +1189,28 @@
       const [availableModels, setAvailableModels] = useState([]);
       const [modelsLoading, setModelsLoading] = useState(true);
 
-      // Load available models based on authenticated providers
+      // Load available models from API based on authenticated providers
       useEffect(() => {
         const loadModels = async () => {
           try {
-            // Force refresh on initial load to ensure fresh status after onboarding
-            const health = await api.health(true);
-            const models = [];
+            // Get health status and models list in parallel
+            const [health, modelsResponse] = await Promise.all([
+              api.health(true),
+              api.listModels()
+            ]);
 
-            // Add Codex models if authenticated
-            if (health.codex?.authenticated) {
-              const codexModels = [
-                { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', provider: 'codex' },
-                { id: 'gpt-5.1-codex', name: 'GPT-5.1 Codex', provider: 'codex' },
-                { id: 'gpt-5.2', name: 'GPT-5.2', provider: 'codex' },
-                { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'codex' },
-                { id: 'o3-mini', name: 'O3 Mini', provider: 'codex' },
-                { id: 'o4-mini', name: 'O4 Mini', provider: 'codex' },
-              ];
-              models.push(...codexModels);
-            }
+            const allModels = modelsResponse.data || [];
 
-            // Add Claude models if authenticated
-            if (health.claude?.authenticated) {
-              const claudeModels = [
-                { id: 'claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'claude' },
-                { id: 'claude-opus-4', name: 'Claude Opus 4', provider: 'claude' },
-                { id: 'claude-haiku', name: 'Claude Haiku', provider: 'claude' },
-              ];
-              models.push(...claudeModels);
-            }
+            // Filter models based on authenticated providers
+            const models = allModels.filter(m => {
+              if (m.provider === 'codex' && health.codex?.authenticated) return true;
+              if (m.provider === 'claude' && health.claude?.authenticated) return true;
+              return false;
+            }).map(m => ({
+              id: m.id,
+              name: m.id,
+              provider: m.provider
+            }));
 
             setAvailableModels(models);
             // Set default model to first available
@@ -1227,10 +1219,9 @@
             }
           } catch (e) {
             console.error('Failed to load models:', e);
-            // Fallback: show all models if health check fails
+            // Fallback: show basic models if API fails
             setAvailableModels([
-              { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', provider: 'codex' },
-              { id: 'claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'claude' },
+              { id: 'claude-sonnet-4', name: 'claude-sonnet-4', provider: 'claude' },
             ]);
           } finally {
             setModelsLoading(false);
