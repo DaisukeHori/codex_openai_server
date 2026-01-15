@@ -497,8 +497,26 @@ class CodexManager {
       const platform = process.platform;
       let proc;
 
+      // Escape argument for shell - handle special characters
+      const escapeArg = (str: string): string => {
+        // Use single quotes for the argument and escape single quotes inside
+        return "'" + str.replace(/'/g, "'\"'\"'") + "'";
+      };
+
+      // Build command with properly escaped arguments
+      const buildCommand = (): string => {
+        const escapedArgs = args.map((arg, i) => {
+          // -p (prompt) argument needs escaping
+          if (args[i - 1] === '-p') {
+            return escapeArg(arg);
+          }
+          return arg;
+        });
+        return `"${this.codexPath}" ${escapedArgs.join(' ')}`;
+      };
+
       if (platform === 'darwin') {
-        const command = `${this.codexPath} ${args.join(' ')}`;
+        const command = buildCommand();
         proc = spawn('/bin/zsh', ['-l', '-c', command], {
           env: { ...process.env },
         });
@@ -508,7 +526,7 @@ class CodexManager {
           env: { ...process.env },
         });
       } else {
-        const command = `${this.codexPath} ${args.join(' ')}`;
+        const command = buildCommand();
         proc = spawn('/bin/bash', ['-l', '-c', command], {
           env: { ...process.env },
         });
@@ -518,15 +536,15 @@ class CodexManager {
         proc.kill();
         reject(new Error('Command timeout'));
       }, timeout);
-      
+
       proc.stdout?.on('data', (data) => {
         output += data.toString();
       });
-      
+
       proc.stderr?.on('data', (data) => {
         errorOutput += data.toString();
       });
-      
+
       proc.on('close', (code) => {
         clearTimeout(timer);
         if (code === 0) {
@@ -535,7 +553,7 @@ class CodexManager {
           reject(new Error(errorOutput || `Exit code: ${code}`));
         }
       });
-      
+
       proc.on('error', (err) => {
         clearTimeout(timer);
         reject(err);
@@ -551,34 +569,58 @@ class CodexManager {
     onError: (error: Error) => void
   ): string {
     const id = `proc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    const args = ['-m', model, '-p', prompt, '--no-stream'];
-    
-    const proc = spawn(this.codexPath, args, {
-      shell: true,
-      env: { ...process.env },
-    });
-    
+
+    // Use login shell to get proper PATH (like runCommand)
+    const platform = process.platform;
+    let proc;
+
+    // Escape prompt for shell - handle special characters
+    const escapeForShell = (str: string): string => {
+      // Use single quotes for the prompt and escape single quotes inside
+      return str.replace(/'/g, "'\"'\"'");
+    };
+
+    if (platform === 'darwin') {
+      const escapedPrompt = escapeForShell(prompt);
+      const command = `"${this.codexPath}" -m ${model} -p '${escapedPrompt}' --no-stream`;
+      proc = spawn('/bin/zsh', ['-l', '-c', command], {
+        env: { ...process.env },
+      });
+    } else if (platform === 'win32') {
+      const args = ['-m', model, '-p', prompt, '--no-stream'];
+      proc = spawn(this.codexPath, args, {
+        shell: true,
+        env: { ...process.env },
+      });
+    } else {
+      // Linux: use login shell with single-quoted prompt
+      const escapedPrompt = escapeForShell(prompt);
+      const command = `"${this.codexPath}" -m ${model} -p '${escapedPrompt}' --no-stream`;
+      proc = spawn('/bin/bash', ['-l', '-c', command], {
+        env: { ...process.env },
+      });
+    }
+
     this.activeProcesses.set(id, {
       process: proc,
       id,
       startTime: new Date(),
     });
-    
+
     let output = '';
-    
+
     proc.stdout?.on('data', (data) => {
       const text = data.toString();
       output += text;
       onData(text);
     });
-    
+
     proc.stderr?.on('data', (data) => {
       const text = data.toString();
       output += text;
       onData(text);
     });
-    
+
     proc.on('close', (code) => {
       this.activeProcesses.delete(id);
       if (code === 0) {
@@ -587,12 +629,12 @@ class CodexManager {
         onError(new Error(`Process exited with code ${code}`));
       }
     });
-    
+
     proc.on('error', (err) => {
       this.activeProcesses.delete(id);
       onError(err);
     });
-    
+
     return id;
   }
   
