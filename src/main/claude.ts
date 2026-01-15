@@ -702,17 +702,18 @@ export class ClaudeManager {
         return str.replace(/'/g, "'\"'\"'");
       };
 
+      // Use plain text output (simpler and more reliable)
       if (platform === 'darwin') {
         // On macOS, use login shell with single-quoted prompt for safety
         const escapedPrompt = escapeForShell(prompt);
-        const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel} --output-format json`;
+        const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
         console.log(`[Claude] Running: /bin/zsh -l -c ${command.substring(0, 100)}...`);
         proc = spawn('/bin/zsh', ['-l', '-c', command], {
           env: { ...process.env },
         });
       } else if (platform === 'win32') {
         // Windows: pass args directly, shell handles escaping
-        const args = ['-p', prompt, '--model', cliModel, '--output-format', 'json'];
+        const args = ['-p', prompt, '--model', cliModel];
         proc = spawn(this.claudePath, args, {
           shell: true,
           env: { ...process.env },
@@ -720,7 +721,7 @@ export class ClaudeManager {
       } else {
         // Linux: use login shell with single-quoted prompt
         const escapedPrompt = escapeForShell(prompt);
-        const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel} --output-format json`;
+        const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
         console.log(`[Claude] Running: /bin/bash -l -c ${command.substring(0, 100)}...`);
         proc = spawn('/bin/bash', ['-l', '-c', command], {
           env: { ...process.env },
@@ -744,22 +745,10 @@ export class ClaudeManager {
         clearTimeout(timer);
 
         if (code === 0) {
-          // Parse JSON output if possible
-          try {
-            const jsonResponse = JSON.parse(output.trim());
-            resolve({
-              result: jsonResponse.result || jsonResponse.text || jsonResponse.content || output.trim(),
-              cost_usd: jsonResponse.cost_usd,
-              session_id: jsonResponse.session_id,
-              is_error: false,
-            });
-          } catch {
-            // If JSON parsing fails, return raw text
-            resolve({
-              result: output.trim(),
-              is_error: false,
-            });
-          }
+          resolve({
+            result: output.trim(),
+            is_error: false,
+          });
         } else {
           reject(new Error(errorOutput || output || `Exit code: ${code}`));
         }
@@ -877,21 +866,22 @@ export class ClaudeManager {
       return str.replace(/'/g, "'\"'\"'");
     };
 
+    // Use plain text output for streaming (simpler and more reliable)
     if (platform === 'darwin') {
       const escapedPrompt = escapeForShell(prompt);
-      const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel} --output-format stream-json`;
+      const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
       console.log(`[Claude] Running: /bin/zsh -l -c ${command.substring(0, 100)}...`);
       proc = spawn('/bin/zsh', ['-l', '-c', command], {
         env: { ...process.env },
       });
     } else if (platform === 'win32') {
-      proc = spawn(this.claudePath, ['-p', prompt, '--model', cliModel, '--output-format', 'stream-json'], {
+      proc = spawn(this.claudePath, ['-p', prompt, '--model', cliModel], {
         shell: true,
         env: { ...process.env },
       });
     } else {
       const escapedPrompt = escapeForShell(prompt);
-      const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel} --output-format stream-json`;
+      const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel}`;
       console.log(`[Claude] Running: /bin/bash -l -c ${command.substring(0, 100)}...`);
       proc = spawn('/bin/bash', ['-l', '-c', command], {
         env: { ...process.env },
@@ -905,50 +895,24 @@ export class ClaudeManager {
     });
 
     let output = '';
-    let textBuffer = '';
 
     proc.stdout?.on('data', (data) => {
       const chunk = data.toString();
       output += chunk;
-
-      // Parse stream-json lines and extract text content
-      const lines = chunk.split('\n');
-      for (const line of lines) {
-        if (line.trim()) {
-          try {
-            const json = JSON.parse(line);
-            // Extract text from different event types
-            if (json.type === 'assistant' && json.message?.content) {
-              for (const block of json.message.content) {
-                if (block.type === 'text' && block.text) {
-                  textBuffer += block.text;
-                  onData(block.text);
-                }
-              }
-            } else if (json.type === 'content_block_delta' && json.delta?.text) {
-              textBuffer += json.delta.text;
-              onData(json.delta.text);
-            } else if (json.type === 'text' && json.text) {
-              textBuffer += json.text;
-              onData(json.text);
-            }
-          } catch {
-            // Not JSON, pass through as text (fallback)
-            onData(chunk);
-          }
-        }
-      }
+      // Send text directly
+      onData(chunk);
     });
 
     proc.stderr?.on('data', (data) => {
       // Log stderr but don't send to client as content
-      console.log('[Claude stderr]', data.toString());
+      const text = data.toString();
+      console.log('[Claude stderr]', text);
     });
 
     proc.on('close', (code) => {
       this.activeProcesses.delete(id);
       if (code === 0) {
-        onEnd(textBuffer || output);
+        onEnd(output);
       } else {
         onError(new Error(`Process exited with code ${code}`));
       }
