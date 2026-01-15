@@ -393,6 +393,8 @@ export function startServer(port: number): Promise<ServerStatus> {
         stream
       } = req.body;
 
+      console.log(`[Server] POST /v1/responses - model: ${model}, stream: ${stream}`);
+
       if (!input) {
         res.status(400).json({ error: { message: 'input is required' } });
         return;
