@@ -289,11 +289,51 @@ class TunnelManager {
   
   stop(): void {
     if (this.process) {
-      this.process.kill('SIGTERM');
+      const proc = this.process;
+      const pid = proc.pid;
+      console.log(`[Tunnel] Stopping cloudflared process (PID: ${pid})`);
+
+      // First try SIGTERM
+      proc.kill('SIGTERM');
+
+      // Set a timeout to force kill if still running
+      setTimeout(() => {
+        try {
+          // Check if process is still running
+          if (pid) {
+            process.kill(pid, 0); // This throws if process doesn't exist
+            console.log(`[Tunnel] Process still running, sending SIGKILL`);
+            proc.kill('SIGKILL');
+          }
+        } catch (e) {
+          // Process already terminated
+          console.log(`[Tunnel] Process terminated`);
+        }
+      }, 2000);
+
       this.process = null;
     }
     this.url = null;
     this.startedAt = null;
+    this.error = null;
+  }
+
+  // Force kill all cloudflared processes (cleanup)
+  forceKillAll(): void {
+    console.log(`[Tunnel] Force killing all cloudflared processes`);
+    try {
+      if (process.platform === 'win32') {
+        execSync('taskkill /F /IM cloudflared.exe 2>nul', { encoding: 'utf-8', stdio: 'pipe' });
+      } else {
+        execSync('pkill -9 cloudflared 2>/dev/null || true', { encoding: 'utf-8', stdio: 'pipe' });
+      }
+    } catch (e) {
+      // Ignore errors (no processes to kill)
+    }
+    this.process = null;
+    this.url = null;
+    this.startedAt = null;
+    this.error = null;
   }
   
   isActive(): boolean {

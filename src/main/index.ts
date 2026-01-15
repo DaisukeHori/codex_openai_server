@@ -134,11 +134,23 @@ function createWindow() {
 
 function quitApp() {
   isQuitting = true;
+  console.log('[App] Quitting application...');
+
+  // Stop tunnel first
+  try {
+    tunnelManager.forceKillAll();
+    console.log('[App] Tunnel stopped');
+  } catch (e) {
+    console.log('[App] Error stopping tunnel:', e);
+  }
+
   // Only stop server if killOnClose is enabled (default: true)
   const killOnClose = configManager.get('killOnClose');
   if (killOnClose !== false) {
     stopServer();
+    console.log('[App] Server stopped');
   }
+
   destroyTray();
   app.quit();
 }
@@ -639,6 +651,12 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  // Ensure tunnel is stopped on any quit
+  try {
+    tunnelManager.forceKillAll();
+  } catch (e) {
+    // Ignore errors
+  }
 });
 
 // Handle errors
