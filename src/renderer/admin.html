@@ -1565,7 +1565,7 @@
         if (window.electronAPI) {
           await window.electronAPI.setConfig(configKey, value);
           setCustomPaths(prev => ({ ...prev, [key]: value }));
-          showToast('パスを保存しました。再起動後に適用されます。', 'success');
+          showToast('パスを保存しました。次のリクエストから適用されます。', 'success');
         }
       };
 

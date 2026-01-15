@@ -148,9 +148,15 @@ export class ClaudeManager {
   private findClaudePath(): void {
     // Check custom path first
     const customPath = configManager.get('customClaudePath');
-    if (customPath && fs.existsSync(customPath)) {
-      this.claudePath = customPath;
-      return;
+    console.log(`[Claude] findClaudePath: customPath from config = "${customPath}"`);
+    if (customPath) {
+      if (fs.existsSync(customPath)) {
+        console.log(`[Claude] Using custom path: ${customPath}`);
+        this.claudePath = customPath;
+        return;
+      } else {
+        console.log(`[Claude] Custom path does not exist: ${customPath}`);
+      }
     }
 
     const isWindows = process.platform === 'win32';
@@ -596,9 +602,23 @@ export class ClaudeManager {
            model === 'haiku';
   }
 
+  // Refresh path from config (call before running commands)
+  private refreshPath(): void {
+    const customPath = configManager.get('customClaudePath');
+    if (customPath && fs.existsSync(customPath)) {
+      if (this.claudePath !== customPath) {
+        console.log(`[Claude] Refreshed path from config: ${customPath}`);
+        this.claudePath = customPath;
+      }
+    }
+  }
+
   // Run prompt with JSON output format for structured responses
   async runPrompt(prompt: string, model: string, timeout: number = 120000): Promise<ClaudeResponse> {
     return new Promise((resolve, reject) => {
+      // Refresh path from config before running
+      this.refreshPath();
+
       const cliModel = this.getCliModel(model);
 
       // Pre-check: if claudePath is just 'claude', CLI wasn't found
@@ -719,6 +739,10 @@ export class ClaudeManager {
     onError: (error: Error) => void
   ): string {
     const id = `claude_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Refresh path from config before running
+    this.refreshPath();
+
     const cliModel = this.getCliModel(model);
 
     // Pre-check: if claudePath is just 'claude', CLI wasn't found
