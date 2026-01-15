@@ -1,4 +1,4 @@
-# Codex API Server
+# Codex ClaudeCode API Server
 
 **OpenAI API互換サーバー** - Codex CLI と Claude Code をラップしたデスクトップアプリケーション
 
