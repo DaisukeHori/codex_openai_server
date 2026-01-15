@@ -65,12 +65,20 @@ export class ClaudeManager {
     try {
       if (fs.existsSync(nvmDir)) {
         const versions = fs.readdirSync(nvmDir);
+        console.log(`[Claude] NVM versions found: ${versions.join(', ')}`);
         for (const version of versions) {
-          paths.push(path.join(nvmDir, version, 'bin', 'claude'));
+          const claudePath = path.join(nvmDir, version, 'bin', 'claude');
+          paths.push(claudePath);
+          // Check if file exists and log
+          if (fs.existsSync(claudePath)) {
+            console.log(`[Claude] Found claude in NVM: ${claudePath}`);
+          }
         }
+      } else {
+        console.log(`[Claude] NVM directory not found: ${nvmDir}`);
       }
     } catch (e) {
-      // Ignore errors
+      console.log(`[Claude] Error reading NVM directory:`, e);
     }
     return paths;
   }
