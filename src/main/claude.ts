@@ -593,6 +593,13 @@ export class ClaudeManager {
     return new Promise((resolve, reject) => {
       const cliModel = this.getCliModel(model);
 
+      // Pre-check: if claudePath is just 'claude', CLI wasn't found
+      console.log(`[Claude] runPrompt: claudePath=${this.claudePath}, model=${model}, cliModel=${cliModel}`);
+      if (this.claudePath === 'claude' && !fs.existsSync('/usr/local/bin/claude') && !fs.existsSync('/usr/bin/claude')) {
+        reject(new Error('Claude Code is not installed. Install with: npm install -g @anthropic-ai/claude-code'));
+        return;
+      }
+
       let output = '';
       let errorOutput = '';
       let proc;
@@ -610,6 +617,7 @@ export class ClaudeManager {
         // On macOS, use login shell with single-quoted prompt for safety
         const escapedPrompt = escapeForShell(prompt);
         const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel} --output-format json`;
+        console.log(`[Claude] Running: /bin/zsh -l -c ${command.substring(0, 100)}...`);
         proc = spawn('/bin/zsh', ['-l', '-c', command], {
           env: { ...process.env },
         });
@@ -624,6 +632,7 @@ export class ClaudeManager {
         // Linux: use login shell with single-quoted prompt
         const escapedPrompt = escapeForShell(prompt);
         const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel} --output-format json`;
+        console.log(`[Claude] Running: /bin/bash -l -c ${command.substring(0, 100)}...`);
         proc = spawn('/bin/bash', ['-l', '-c', command], {
           env: { ...process.env },
         });
@@ -703,6 +712,17 @@ export class ClaudeManager {
   ): string {
     const id = `claude_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const cliModel = this.getCliModel(model);
+
+    // Pre-check: if claudePath is just 'claude', CLI wasn't found
+    console.log(`[Claude] spawnInteractive: claudePath=${this.claudePath}, model=${model}, cliModel=${cliModel}`);
+    if (this.claudePath === 'claude' && !fs.existsSync('/usr/local/bin/claude') && !fs.existsSync('/usr/bin/claude')) {
+      // CLI not found - return error immediately
+      setTimeout(() => {
+        onError(new Error('Claude Code is not installed. Install with: npm install -g @anthropic-ai/claude-code'));
+      }, 0);
+      return id;
+    }
+
     let proc;
 
     // Use login shell to get proper PATH (like runRawCommand)
@@ -716,6 +736,7 @@ export class ClaudeManager {
     if (platform === 'darwin') {
       const escapedPrompt = escapeForShell(prompt);
       const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel} --output-format stream-json`;
+      console.log(`[Claude] Running: /bin/zsh -l -c ${command.substring(0, 100)}...`);
       proc = spawn('/bin/zsh', ['-l', '-c', command], {
         env: { ...process.env },
       });
@@ -727,6 +748,7 @@ export class ClaudeManager {
     } else {
       const escapedPrompt = escapeForShell(prompt);
       const command = `"${this.claudePath}" -p '${escapedPrompt}' --model ${cliModel} --output-format stream-json`;
+      console.log(`[Claude] Running: /bin/bash -l -c ${command.substring(0, 100)}...`);
       proc = spawn('/bin/bash', ['-l', '-c', command], {
         env: { ...process.env },
       });

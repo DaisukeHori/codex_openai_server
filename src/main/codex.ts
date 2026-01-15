@@ -570,6 +570,16 @@ class CodexManager {
   ): string {
     const id = `proc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+    // Pre-check: if codexPath is just 'codex', CLI wasn't found
+    console.log(`[Codex] spawnInteractive: codexPath=${this.codexPath}, model=${model}`);
+    if (this.codexPath === 'codex' && !fs.existsSync('/usr/local/bin/codex') && !fs.existsSync('/usr/bin/codex')) {
+      // CLI not found - return error immediately
+      setTimeout(() => {
+        onError(new Error('Codex CLI is not installed. Install with: npm install -g @openai/codex'));
+      }, 0);
+      return id;
+    }
+
     // Use login shell to get proper PATH (like runCommand)
     const platform = process.platform;
     let proc;
@@ -583,6 +593,7 @@ class CodexManager {
     if (platform === 'darwin') {
       const escapedPrompt = escapeForShell(prompt);
       const command = `"${this.codexPath}" -m ${model} -p '${escapedPrompt}' --no-stream`;
+      console.log(`[Codex] Running: /bin/zsh -l -c ${command}`);
       proc = spawn('/bin/zsh', ['-l', '-c', command], {
         env: { ...process.env },
       });
@@ -596,6 +607,7 @@ class CodexManager {
       // Linux: use login shell with single-quoted prompt
       const escapedPrompt = escapeForShell(prompt);
       const command = `"${this.codexPath}" -m ${model} -p '${escapedPrompt}' --no-stream`;
+      console.log(`[Codex] Running: /bin/bash -l -c ${command}`);
       proc = spawn('/bin/bash', ['-l', '-c', command], {
         env: { ...process.env },
       });
