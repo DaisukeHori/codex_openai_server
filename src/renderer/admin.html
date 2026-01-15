@@ -438,6 +438,18 @@
         // Config API
         getConfig: () => fetch(`${baseUrl}/admin/config`, { headers }).then(handle),
         updateConfig: (data) => fetch(`${baseUrl}/admin/config`, { method: 'PATCH', headers, body: JSON.stringify(data) }).then(handle),
+        // Logs API
+        getLogs: (limit = 100, since = 0) => {
+          let url = `${baseUrl}/admin/logs?limit=${limit}`;
+          if (since) url += `&since=${since}`;
+          return fetch(url, { headers }).then(handle);
+        },
+        clearLogs: () => fetch(`${baseUrl}/admin/logs`, { method: 'DELETE', headers }).then(handle),
+        // Generic request method for flexibility
+        request: (path, options = {}) => {
+          const url = path.startsWith('/') ? `${baseUrl}${path}` : `${baseUrl}/${path}`;
+          return fetch(url, { headers, ...options }).then(handle);
+        },
       };
     };
 
