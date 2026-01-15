@@ -1788,12 +1788,12 @@
                     <button onClick={() => copyUrl(tunnel.url)} className={`px-3 py-2 rounded-lg text-sm font-medium ${copied ? 'bg-green-500 text-white' : 'btn-secondary'}`}>
                       {copied ? '✓' : 'コピー'}
                     </button>
-                    <a href={tunnel.url} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-2 text-sm">開く</a>
+                    <button onClick={() => window.electronAPI?.openExternal(tunnel.url)} className="btn-secondary px-3 py-2 text-sm">開く</button>
                   </div>
                   <div className="mt-3 flex gap-2">
-                    <a href={`${tunnel.url}/docs`} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-500 hover:underline">📖 Swagger UI</a>
+                    <button onClick={() => window.electronAPI?.openExternal(`${tunnel.url}/docs`)} className="text-sm text-indigo-500 hover:underline bg-transparent border-none cursor-pointer p-0">📖 Swagger UI</button>
                     <span className="text-[var(--text-muted)]">|</span>
-                    <a href={`${tunnel.url}/admin`} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-500 hover:underline">⚙️ 管理画面</a>
+                    <button onClick={() => window.electronAPI?.openExternal(`${tunnel.url}/admin`)} className="text-sm text-indigo-500 hover:underline bg-transparent border-none cursor-pointer p-0">⚙️ 管理画面</button>
                   </div>
                 </div>
               )}
