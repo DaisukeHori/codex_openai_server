@@ -207,10 +207,10 @@ class TunnelManager {
     if (this.process) {
       return this.getStatus();
     }
-    
+
     this.error = null;
     this.url = null;
-    
+
     // Check if cloudflared is available
     const installed = await this.isCloudflaredInstalled();
     if (!installed) {
@@ -221,29 +221,65 @@ class TunnelManager {
         return this.getStatus();
       }
     }
-    
+
     return new Promise((resolve) => {
       const cloudflaredPath = this.getCloudflaredPath();
       const localUrl = `http://localhost:${this.port}`;
-      
-      const proc = spawn(cloudflaredPath, ['tunnel', '--url', localUrl], {
+
+      // Check if a tunnel token is configured (for custom domains)
+      const tunnelToken = configManager.get('tunnelToken');
+
+      let args: string[];
+      let useToken = false;
+
+      if (tunnelToken && tunnelToken.trim()) {
+        // Use token-based tunnel (custom domain from Cloudflare dashboard)
+        args = ['tunnel', 'run', '--token', tunnelToken.trim()];
+        useToken = true;
+        console.log('[Tunnel] Starting with custom token (named tunnel)');
+      } else {
+        // Use quick tunnel (random trycloudflare.com URL)
+        args = ['tunnel', '--url', localUrl];
+        console.log('[Tunnel] Starting quick tunnel');
+      }
+
+      const proc = spawn(cloudflaredPath, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: process.platform === 'win32',
       });
       
       let resolved = false;
-      
+
       const handleOutput = (data: Buffer) => {
         const text = data.toString();
-        
-        // Look for the tunnel URL
-        const urlMatch = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
-        if (urlMatch && !this.url) {
-          this.url = urlMatch[0];
-          this.startedAt = Date.now();
-          if (!resolved) {
-            resolved = true;
-            resolve(this.getStatus());
+        console.log('[Tunnel] Output:', text.substring(0, 200));
+
+        if (useToken) {
+          // For token-based tunnels, look for "Connection registered" or similar
+          // and use the custom URL from config
+          if (text.includes('Registered tunnel connection') || text.includes('Connection') && text.includes('registered')) {
+            const customUrl = configManager.get('tunnelCustomUrl');
+            if (customUrl && customUrl.trim() && !this.url) {
+              this.url = customUrl.trim();
+              this.startedAt = Date.now();
+              console.log(`[Tunnel] Token tunnel connected: ${this.url}`);
+              if (!resolved) {
+                resolved = true;
+                resolve(this.getStatus());
+              }
+            }
+          }
+        } else {
+          // For quick tunnels, look for the trycloudflare.com URL
+          const urlMatch = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
+          if (urlMatch && !this.url) {
+            this.url = urlMatch[0];
+            this.startedAt = Date.now();
+            console.log(`[Tunnel] Quick tunnel URL: ${this.url}`);
+            if (!resolved) {
+              resolved = true;
+              resolve(this.getStatus());
+            }
           }
         }
       };

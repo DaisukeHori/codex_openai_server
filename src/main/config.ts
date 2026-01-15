@@ -31,6 +31,8 @@ export interface AppConfig {
   // Tunnel
   tunnelAutoStart: boolean;
   lastTunnelUrl: string | null;
+  tunnelToken: string; // Cloudflare Tunnel token for custom domains
+  tunnelCustomUrl: string; // Custom domain URL (e.g., https://api.example.com)
 
   // Auto Update
   updateEnabled: boolean;
@@ -62,6 +64,8 @@ const defaults: AppConfig = {
   killOnClose: true,
   tunnelAutoStart: false,
   lastTunnelUrl: null,
+  tunnelToken: '',
+  tunnelCustomUrl: '',
   updateEnabled: true,
   updateCheckOnStartup: true,
   updateNotifyOnStartup: true,

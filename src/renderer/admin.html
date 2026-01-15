@@ -1754,6 +1754,15 @@
         setTimeout(() => setCopied(false), 2000);
       };
 
+      const handleConfigChange = async (key, value) => {
+        try {
+          await api.updateConfig({ [key]: value });
+          setConfig(prev => ({ ...prev, [key]: value }));
+        } catch (e) {
+          showToast('設定更新失敗', 'error');
+        }
+      };
+
       if (loading) return <div className="flex justify-center h-64"><Spinner size="lg" /></div>;
 
       return (
@@ -1824,6 +1833,43 @@
                   ※ Cloudflare Tunnelを使用するにはcloudflaredのインストールが必要です
                 </p>
               )}
+
+              {/* Custom Domain Settings */}
+              <div className="mt-6 pt-4 border-t border-[var(--border)]">
+                <h4 className="text-sm font-medium mb-3">カスタムドメイン設定（オプション）</h4>
+                <p className="text-xs text-[var(--text-muted)] mb-4">
+                  Cloudflare Zero TrustでNamed Tunnelを作成しトークンを設定すると、カスタムドメインを使用できます。
+                  空欄の場合はランダムURL（trycloudflare.com）が使用されます。
+                </p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">トンネルトークン</label>
+                    <input
+                      type="password"
+                      value={config?.tunnelToken || ''}
+                      onChange={(e) => handleConfigChange('tunnelToken', e.target.value)}
+                      placeholder="eyJhIjoixxxxxxx..."
+                      className="input-field text-sm"
+                    />
+                    <p className="text-xs text-[var(--text-muted)] mt-1">
+                      Cloudflare Zero Trust → Access → Tunnels で取得
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">カスタムURL</label>
+                    <input
+                      type="url"
+                      value={config?.tunnelCustomUrl || ''}
+                      onChange={(e) => handleConfigChange('tunnelCustomUrl', e.target.value)}
+                      placeholder="https://api.example.com"
+                      className="input-field text-sm"
+                    />
+                    <p className="text-xs text-[var(--text-muted)] mt-1">
+                      トンネルに設定したホスト名（Public Hostname）
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
