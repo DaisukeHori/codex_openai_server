@@ -1,10 +1,10 @@
 @echo off
 REM ============================================
-REM Codex API Server - Windows Build Script
+REM Codex ClaudeCode API Server - Windows Build Script
 REM ============================================
 
 echo ===============================================
-echo   Codex API Server - Windows Build
+echo   Codex ClaudeCode API Server - Windows Build
 echo ===============================================
 echo.
 
@@ -78,6 +78,6 @@ echo Output files are in the 'release' folder:
 dir /b release\*.exe 2>nul
 echo.
 echo Portable version: release\CodexAPIServer-Portable.exe
-echo Installer: release\Codex API Server Setup*.exe
+echo Installer: release\Codex ClaudeCode API Server Setup*.exe
 echo.
 pause

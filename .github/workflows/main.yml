@@ -193,7 +193,7 @@ jobs:
             artifacts/macos-build/*
             artifacts/linux-build/*
           body: |
-            ## Codex API Server v1.0.${{ github.run_number }}
+            ## Codex ClaudeCode API Server v1.0.${{ github.run_number }}
 
             OpenAI API互換サーバーのデスクトップアプリ
 

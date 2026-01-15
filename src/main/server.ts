@@ -269,7 +269,7 @@ export function startServer(port: number): Promise<ServerStatus> {
     const openApiSpec = {
       openapi: '3.0.3',
       info: {
-        title: 'Codex API Server',
+        title: 'Codex ClaudeCode API Server',
         description: 'OpenAI-compatible API that wraps Codex CLI and Claude Code',
         version: '1.0.0',
       },
@@ -395,7 +395,7 @@ export function startServer(port: number): Promise<ServerStatus> {
       res.send(`<!DOCTYPE html>
 <html>
 <head>
-  <title>Codex API Server - Docs</title>
+  <title>Codex ClaudeCode API Server - Docs</title>
   <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
 </head>
 <body>

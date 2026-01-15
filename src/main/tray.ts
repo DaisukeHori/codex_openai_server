@@ -32,7 +32,7 @@ export function createTray(mainWindow: BrowserWindow, onQuit: () => void): Tray 
   icon = icon.resize({ width: size, height: size });
   
   tray = new Tray(icon);
-  tray.setToolTip('Codex API Server');
+  tray.setToolTip('Codex ClaudeCode API Server');
   
   // Update context menu
   const updateMenu = () => {
@@ -43,7 +43,7 @@ export function createTray(mainWindow: BrowserWindow, onQuit: () => void): Tray 
     
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: 'Codex API Server',
+        label: 'Codex ClaudeCode API Server',
         enabled: false,
         icon: icon.resize({ width: 16, height: 16 }),
       },

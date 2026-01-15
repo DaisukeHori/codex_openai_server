@@ -10,7 +10,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DaisukeHori/codex_openai_server.git"
+    "url": "https://github.com/DaisukeHori/codex_cc_openai_server.git"
   },
   "scripts": {
     "start": "electron .",
@@ -47,7 +47,7 @@
   },
   "build": {
     "appId": "com.codex.api-server",
-    "productName": "Codex API Server",
+    "productName": "Codex ClaudeCode API Server",
     "artifactName": "CodexAPIServer-${version}-${arch}.${ext}",
     "directories": {
       "output": "release"
@@ -90,7 +90,7 @@
     "publish": {
       "provider": "github",
       "owner": "DaisukeHori",
-      "repo": "codex_openai_server"
+      "repo": "codex_cc_openai_server"
     }
   }
 }

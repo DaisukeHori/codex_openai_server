@@ -9,7 +9,7 @@
 
 ## 概要
 
-Codex API Server は、OpenAI の Codex CLI および Anthropic の Claude Code CLI をラップし、OpenAI API 互換のエンドポイントとして提供するデスクトップアプリケーションです。
+Codex ClaudeCode API Server は、OpenAI の Codex CLI および Anthropic の Claude Code CLI をラップし、OpenAI API 互換のエンドポイントとして提供するデスクトップアプリケーションです。
 
 既存の OpenAI API クライアントやツールをそのまま使用して、Codex や Claude を利用できます。
 
@@ -77,7 +77,7 @@ claude  # 初回起動で認証
 ### Windows
 
 **インストーラー版**
-1. [Releases](https://github.com/DaisukeHori/codex_openai_server/releases) から `CodexAPIServer-Setup.exe` をダウンロード
+1. [Releases](https://github.com/DaisukeHori/codex_cc_openai_server/releases) から `CodexAPIServer-Setup.exe` をダウンロード
 2. インストーラーを実行
 3. デスクトップショートカットから起動
 
@@ -91,7 +91,7 @@ claude  # 初回起動で認証
 2. アプリケーションフォルダにドラッグ
 3. 初回起動前にターミナルで権限付与：
    ```bash
-   xattr -cr "/Applications/Codex API Server.app"
+   xattr -cr "/Applications/Codex ClaudeCode API Server.app"
    ```
 4. Launchpad から起動
 
@@ -431,7 +431,7 @@ CLI が自動検出されない場合、設定画面で手動指定できます�
 ### プロジェクト構造
 
 ```
-codex_openai_server/
+codex_cc_openai_server/
 ├── src/
 │   ├── main/                 # Electron メインプロセス
 │   │   ├── index.ts          # エントリーポイント
@@ -605,7 +605,7 @@ curl -H "Authorization: Bearer msk_your_master_key" ...
 
 ```bash
 # Gatekeeper を解除
-xattr -cr "/Applications/Codex API Server.app"
+xattr -cr "/Applications/Codex ClaudeCode API Server.app"
 
 # または右クリック → 開く
 ```

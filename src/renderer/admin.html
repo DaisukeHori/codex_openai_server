@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' http://localhost:*;">
-  <title>Codex API Server - 管理コンソール</title>
+  <title>Codex ClaudeCode API Server - 管理コンソール</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2445,7 +2445,7 @@
         <div className="min-h-screen flex items-center justify-center p-4">
           <div className="card w-full max-w-sm p-6">
             <div className="mb-6">
-              <h1 className="text-lg font-semibold" style={{letterSpacing: '-0.3px'}}>Codex API Server</h1>
+              <h1 className="text-lg font-semibold" style={{letterSpacing: '-0.3px'}}>Codex ClaudeCode API Server</h1>
               <p className="text-[var(--text-muted)] text-sm mt-1">管理コンソールにログイン</p>
             </div>
             <form onSubmit={submit} className="space-y-4">
@@ -2481,7 +2481,7 @@
 
       const isMac = navigator.platform.toLowerCase().includes('mac');
       const dmgUrl = updateInfo?.version
-        ? `https://github.com/DaisukeHori/codex_openai_server/releases/download/v${updateInfo.version}/CodexAPIServer-${updateInfo.version}-arm64.dmg`
+        ? `https://github.com/DaisukeHori/codex_cc_openai_server/releases/download/v${updateInfo.version}/CodexAPIServer-${updateInfo.version}-arm64.dmg`
         : null;
 
       const handleDMGDownload = async () => {
@@ -2695,7 +2695,7 @@
           {/* Sidebar */}
           <aside className={`sidebar w-56 flex flex-col fixed md:sticky md:top-0 inset-y-0 left-0 z-40 transition-transform duration-200 h-screen overflow-hidden ${sidebarOpen ? '' : '-translate-x-full md:translate-x-0'}`}>
             <div className="p-6 pb-4 flex-shrink-0">
-              <div className="text-sm font-semibold text-[var(--text-primary)]" style={{letterSpacing: '-0.3px'}}>Codex API Server</div>
+              <div className="text-sm font-semibold text-[var(--text-primary)]" style={{letterSpacing: '-0.3px'}}>Codex ClaudeCode API Server</div>
             </div>
             <nav className="flex-1 overflow-y-auto">
               {nav.map(n => (

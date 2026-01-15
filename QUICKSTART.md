@@ -50,7 +50,7 @@ npm run dist:win
 | ファイル | 説明 |
 |---------|------|
 | `CodexAPIServer-Portable.exe` | ポータブル版（インストール不要） |
-| `Codex API Server Setup x.x.x.exe` | インストーラー版 |
+| `Codex ClaudeCode API Server Setup x.x.x.exe` | インストーラー版 |
 
 ## 使い方
 
@@ -60,7 +60,7 @@ npm run dist:win
 3. 初回はセットアップウィザードが表示される
 
 ### インストーラー版
-1. `Codex API Server Setup x.x.x.exe` を実行
+1. `Codex ClaudeCode API Server Setup x.x.x.exe` を実行
 2. インストール先を選択
 3. デスクトップショートカットから起動
 

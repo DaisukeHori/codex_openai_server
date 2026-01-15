@@ -44,7 +44,7 @@ class UpdateManager {
     autoUpdater.setFeedURL({
       provider: 'github',
       owner: 'DaisukeHori',
-      repo: 'codex_openai_server',
+      repo: 'codex_cc_openai_server',
     });
 
     console.log('[AutoUpdater] Initialized with version:', app.getVersion());
