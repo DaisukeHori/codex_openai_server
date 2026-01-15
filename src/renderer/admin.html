@@ -388,7 +388,17 @@
     // ============================================
     const createApi = (baseUrl) => {
       const headers = { 'Content-Type': 'application/json' };
-      const handle = async (res) => { if (!res.ok) throw new Error(await res.text()); return res.json(); };
+      const handle = async (res) => {
+        console.log('[API] Response status:', res.status, 'ok:', res.ok);
+        if (!res.ok) {
+          const text = await res.text();
+          console.error('[API] Error response:', text);
+          throw new Error(text);
+        }
+        const json = await res.json();
+        console.log('[API] Response JSON:', json);
+        return json;
+      };
       return {
         health: (refresh = false) => fetch(`${baseUrl}/health${refresh ? '?refresh=true' : ''}`).then(handle),
         processStatus: () => fetch(`${baseUrl}/status/processes`, { headers }).then(handle),
@@ -410,8 +420,15 @@
         listResponses: (limit = 50) => fetch(`${baseUrl}/v1/responses?limit=${limit}`, { headers }).then(handle),
         getResponse: (id) => fetch(`${baseUrl}/v1/responses/${id}`, { headers }).then(handle),
         deleteResponse: (id) => fetch(`${baseUrl}/v1/responses/${id}`, { method: 'DELETE', headers }).then(handle),
-        createResponse: (data) => fetch(`${baseUrl}/v1/responses`, { method: 'POST', headers, body: JSON.stringify(data) }).then(handle),
-        chatCompletion: (data) => fetch(`${baseUrl}/v1/chat/completions`, { method: 'POST', headers, body: JSON.stringify(data) }).then(handle),
+        createResponse: (data) => {
+          console.log('[API] createResponse called with:', data);
+          console.log('[API] Sending POST to:', `${baseUrl}/v1/responses`);
+          return fetch(`${baseUrl}/v1/responses`, { method: 'POST', headers, body: JSON.stringify(data) }).then(handle);
+        },
+        chatCompletion: (data) => {
+          console.log('[API] chatCompletion called with:', data);
+          return fetch(`${baseUrl}/v1/chat/completions`, { method: 'POST', headers, body: JSON.stringify(data) }).then(handle);
+        },
         // Models API
         listModels: () => fetch(`${baseUrl}/v1/models`, { headers }).then(handle),
         // Tunnel API
@@ -1226,20 +1243,26 @@
         if (!input.trim()) return;
         setLoading(true);
         setResult(null);
+        console.log('[Playground] Starting request - mode:', mode, 'model:', model, 'input:', input.substring(0, 50));
         try {
           let res;
           if (mode === 'responses') {
+            console.log('[Playground] Calling createResponse...');
             res = await api.createResponse({ model, input });
+            console.log('[Playground] createResponse returned:', res);
           } else {
+            console.log('[Playground] Calling chatCompletion...');
             res = await api.chatCompletion({
               model,
               messages: [{ role: 'user', content: input }],
             });
+            console.log('[Playground] chatCompletion returned:', res);
           }
           setResult(res);
           setHistory(h => [{ time: new Date(), mode, input, result: res }, ...h].slice(0, 20));
           showToast('実行完了', 'success');
         } catch (e) {
+          console.error('[Playground] Error:', e);
           setResult({ error: e.message });
           showToast('実行失敗', 'error');
         } finally {

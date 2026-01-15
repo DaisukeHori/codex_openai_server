@@ -734,28 +734,36 @@ export class ClaudeManager {
       }, timeout);
 
       proc.stdout?.on('data', (data) => {
-        output += data.toString();
+        const chunk = data.toString();
+        console.log(`[Claude] stdout chunk (${chunk.length} bytes):`, chunk.substring(0, 100));
+        output += chunk;
       });
 
       proc.stderr?.on('data', (data) => {
-        errorOutput += data.toString();
+        const chunk = data.toString();
+        console.log(`[Claude] stderr chunk (${chunk.length} bytes):`, chunk.substring(0, 100));
+        errorOutput += chunk;
       });
 
       proc.on('close', (code) => {
         clearTimeout(timer);
+        console.log(`[Claude] Process closed - code: ${code}, output length: ${output.length}, error length: ${errorOutput.length}`);
 
         if (code === 0) {
+          console.log(`[Claude] Success - returning ${output.trim().length} chars`);
           resolve({
             result: output.trim(),
             is_error: false,
           });
         } else {
+          console.error(`[Claude] Failed - code: ${code}, error: ${errorOutput.substring(0, 200)}`);
           reject(new Error(errorOutput || output || `Exit code: ${code}`));
         }
       });
 
       proc.on('error', (err) => {
         clearTimeout(timer);
+        console.error(`[Claude] Process error:`, err);
         reject(err);
       });
     });
@@ -767,6 +775,8 @@ export class ClaudeManager {
     model: string,
     timeout: number = 120000
   ): Promise<ClaudeResponse> {
+    console.log(`[Claude] runWithHistory called - ${history.length} messages, model: ${model}`);
+
     // Convert history to a prompt format
     // Claude Code doesn't have native conversation support in -p mode,
     // so we format it as a structured prompt
@@ -776,6 +786,7 @@ export class ClaudeManager {
     }).join('\n\n');
 
     const prompt = `Here is a conversation history. Please continue as the Assistant:\n\n${formattedHistory}\n\nAssistant:`;
+    console.log(`[Claude] Formatted prompt length: ${prompt.length}`);
 
     return this.runPrompt(prompt, model, timeout);
   }

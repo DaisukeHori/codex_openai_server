@@ -104,9 +104,12 @@ export async function runWithHistory(
   timeout: number = 120000
 ): Promise<{ output: string; provider: Provider }> {
   const provider = getProvider(model);
+  console.log(`[ModelRouter] runWithHistory - model: ${model}, provider: ${provider}, history length: ${history.length}`);
 
   if (provider === 'claude') {
+    console.log(`[ModelRouter] Calling claudeManager.runWithHistory...`);
     const response = await claudeManager.runWithHistory(history, model, timeout);
+    console.log(`[ModelRouter] Claude returned ${response.result?.length || 0} chars`);
     return {
       output: response.result,
       provider: 'claude',
@@ -114,8 +117,10 @@ export async function runWithHistory(
   }
 
   // Codex - format history as prompt
+  console.log(`[ModelRouter] Calling codexManager.runCommand...`);
   const prompt = history.map(msg => `${msg.role}: ${msg.content}`).join('\n');
   const output = await codexManager.runCommand(['-m', model, '-p', prompt], timeout);
+  console.log(`[ModelRouter] Codex returned ${output?.length || 0} chars`);
   return {
     output,
     provider: 'codex',

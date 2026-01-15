@@ -397,6 +397,8 @@ export function startServer(port: number): Promise<ServerStatus> {
     }
 
     app.post('/v1/responses', async (req, res) => {
+      console.log('[Server] POST /v1/responses - raw body:', JSON.stringify(req.body).substring(0, 200));
+
       const {
         model = configManager.get('defaultModel'),
         input,
@@ -405,7 +407,7 @@ export function startServer(port: number): Promise<ServerStatus> {
         stream
       } = req.body;
 
-      console.log(`[Server] POST /v1/responses - model: ${model}, stream: ${stream}`);
+      console.log(`[Server] POST /v1/responses - model: ${model}, stream: ${stream}, input length: ${input?.length || 0}`);
 
       if (!input) {
         res.status(400).json({ error: { message: 'input is required' } });
@@ -517,7 +519,9 @@ export function startServer(port: number): Promise<ServerStatus> {
 
       try {
         // Run through model router (automatically selects Codex or Claude)
+        console.log(`[Server] Calling runWithHistory with ${history.length} messages, model: ${model}`);
         const result = await runWithHistory(history, model);
+        console.log(`[Server] runWithHistory returned - provider: ${result.provider}, output length: ${result.output?.length || 0}`);
         const output = result.output;
 
         const response = {
@@ -558,6 +562,7 @@ export function startServer(port: number): Promise<ServerStatus> {
         res.json(response);
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[Server] Error in /v1/responses:`, error);
         res.status(500).json({
           id: responseId,
           object: 'response',
@@ -887,9 +892,22 @@ export function startServer(port: number): Promise<ServerStatus> {
     });
     
     // ========================================
+    // Global Error Handler
+    // ========================================
+
+    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      console.error('[Server] Unhandled error:', err);
+      res.status(500).json({
+        error: {
+          message: err.message || 'Internal server error',
+        }
+      });
+    });
+
+    // ========================================
     // Start Server
     // ========================================
-    
+
     server = app.listen(port, '0.0.0.0', () => {
       console.log(`Server running at http://localhost:${port}`);
       logManager.success('system', `Server started on port ${port}`);
